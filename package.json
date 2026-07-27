@@ -1,0 +1,26 @@
+{
+  "name": "covenant",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Programmable treasury engine on Arc. Conditional multi-step stablecoin settlement.",
+  "workspaces": [
+    "executor"
+  ],
+  "scripts": {
+    "test": "npm run test:contracts && npm run test:executor",
+    "test:contracts": "forge test --root contracts",
+    "test:executor": "npm test --workspace executor",
+    "build:contracts": "forge build --root contracts",
+    "deploy": "cd contracts && forge script script/DeployPolicyVault.s.sol:DeployPolicyVault --rpc-url $ARC_TESTNET_RPC_URL --broadcast",
+    "wallets": "node --env-file=.env executor/scripts/create-wallets.mjs",
+    "wallets:write": "node --env-file=.env executor/scripts/create-wallets.mjs --write",
+    "scan": "npm exec --workspace executor -- tsx --env-file=../.env scripts/scan-releases.ts",
+    "exercise": "node --env-file=.env executor/scripts/exercise-policy.mjs",
+    "failure-path": "node --env-file=.env executor/scripts/failure-path.mjs",
+    "canary": "npm exec --workspace executor -- tsx --env-file=../.env scripts/canary.ts",
+    "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

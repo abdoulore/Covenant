@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.local
+*.pem
+entity-secret*
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/dry-run/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Executor state
+executor/.state/
+*.sqlite
+*.sqlite-journal
+
+# OS
+.DS_Store
+Thumbs.db
