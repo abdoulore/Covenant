@@ -8,6 +8,16 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+/// @notice Minimal Chainlink Data Feed interface. Only the call the Oracle condition needs.
+/// @dev Defined inline rather than pulling in the Chainlink package for one method. Arc has
+///      Chainlink Data Feeds via Chainlink Scale. See docs/specs/PHASE2_CONDITION_TYPES.md.
+interface IAggregatorV3 {
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+}
+
 /// @title PolicyVault
 /// @notice Holds treasury USDC and enforces release conditions onchain. The contract decides
 ///         IF funds move. The offchain executor only decides HOW they route.
@@ -33,7 +43,14 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
     enum ConditionType {
         Timelock,
         Approval,
-        Attestation
+        Attestation,
+        Oracle
+    }
+
+    /// @notice Direction of an Oracle comparison against the threshold.
+    enum Comparator {
+        Gte,
+        Lte
     }
 
     enum PayoutCurrency {
@@ -65,6 +82,13 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         // threshold is config and approvalCount is state for the Approval condition.
         address attester;
         bool attested;
+        // Oracle condition. All config, no per-policy state: the condition is a live read of the
+        // feed. oracleThreshold is expressed in the feed's own decimals. Unset fields on non-oracle
+        // policies stay zero and cost no gas, since zero storage slots are never written.
+        address feed;
+        Comparator comparator;
+        uint64 maxStaleSeconds;
+        int256 oracleThreshold;
     }
 
     IERC20 public immutable usdc;
@@ -116,9 +140,10 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
     error WrongConditionType(uint256 policyId, ConditionType expected, ConditionType actual);
     error UnsupportedRoute(PayoutCurrency payoutCurrency, uint32 destinationDomain);
     error Overfunded(uint256 policyId, uint256 funded, uint256 amount);
-    error UseCreateAttestationPolicy();
+    error UseTypedCreator(ConditionType conditionType);
     error InvalidAttestationSignature(uint256 policyId);
     error AlreadyAttested(uint256 policyId);
+    error InvalidOracleConfig();
 
     constructor(address usdc_, address executor_, address owner_)
         Ownable(owner_)
@@ -169,8 +194,8 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
                 revert InvalidApprovalConfig();
             }
         } else {
-            // Attestation policies carry different parameters and have their own creator.
-            revert UseCreateAttestationPolicy();
+            // Attestation and Oracle policies carry different parameters and have their own creators.
+            revert UseTypedCreator(conditionType);
         }
 
         policyId = nextPolicyId++;
@@ -260,6 +285,50 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         p.status = Status.Pending;
 
         emit PolicyCreated(policyId, recipient, amount, payoutCurrency, destinationDomain, ConditionType.Attestation);
+    }
+
+    /// @notice Create an oracle policy. It releases when a Chainlink Data Feed crosses a threshold.
+    /// @param feed Chainlink AggregatorV3 feed address.
+    /// @param comparator Gte releases when the feed is at or above the threshold, Lte at or below.
+    /// @param threshold Comparison value, in the feed's own decimals. Off-chain callers read
+    ///        feed.decimals() to scale it; the contract compares raw answers.
+    /// @param maxStaleSeconds Reject a feed answer older than this. Set from the feed's heartbeat.
+    /// @dev No keeper exists on Arc (Chainlink Automation is not available), so the executor polls
+    ///      checkCondition and calls release when it flips true. See docs/specs/PHASE2_CONDITION_TYPES.md.
+    function createOraclePolicy(
+        address recipient,
+        uint256 amount,
+        PayoutCurrency payoutCurrency,
+        uint32 destinationDomain,
+        address feed,
+        Comparator comparator,
+        int256 threshold,
+        uint64 maxStaleSeconds
+    ) external onlyOwner returns (uint256 policyId) {
+        if (recipient == address(0) || feed == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (maxStaleSeconds == 0) revert InvalidOracleConfig();
+
+        // Same route guard as createPolicy: EURC has no cross-chain path. See docs/DECISIONS.md D1.
+        if (payoutCurrency == PayoutCurrency.EURC && destinationDomain != ARC_DOMAIN) {
+            revert UnsupportedRoute(payoutCurrency, destinationDomain);
+        }
+
+        policyId = nextPolicyId++;
+
+        Policy storage p = _policies[policyId];
+        p.recipient = recipient;
+        p.amount = amount;
+        p.payoutCurrency = payoutCurrency;
+        p.destinationDomain = destinationDomain;
+        p.conditionType = ConditionType.Oracle;
+        p.feed = feed;
+        p.comparator = comparator;
+        p.oracleThreshold = threshold;
+        p.maxStaleSeconds = maxStaleSeconds;
+        p.status = Status.Pending;
+
+        emit PolicyCreated(policyId, recipient, amount, payoutCurrency, destinationDomain, ConditionType.Oracle);
     }
 
     /// @notice Satisfy an attestation policy by submitting the attester's EIP-712 signature.
@@ -361,7 +430,25 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         if (p.conditionType == ConditionType.Approval) {
             return p.approvalCount >= p.threshold;
         }
-        return p.attested; // Attestation
+        if (p.conditionType == ConditionType.Attestation) {
+            return p.attested;
+        }
+        return _oracleConditionMet(p); // Oracle
+    }
+
+    /// @dev Fail closed. Any doubt about the data means the condition is not met, so release does
+    ///      not fire and checkCondition returns false rather than reverting. A stale, zero, negative,
+    ///      incomplete, or reverting feed all read as "not yet", never as a release.
+    function _oracleConditionMet(Policy storage p) private view returns (bool) {
+        try IAggregatorV3(p.feed).latestRoundData() returns (
+            uint80 roundId, int256 answer, uint256, uint256 updatedAt, uint80 answeredInRound
+        ) {
+            if (answer <= 0 || updatedAt == 0 || answeredInRound < roundId) return false;
+            if (block.timestamp - updatedAt > p.maxStaleSeconds) return false;
+            return p.comparator == Comparator.Gte ? answer >= p.oracleThreshold : answer <= p.oracleThreshold;
+        } catch {
+            return false;
+        }
     }
 
     function _requirePolicy(uint256 policyId) private view returns (Policy storage p) {

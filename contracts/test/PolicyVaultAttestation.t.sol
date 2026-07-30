@@ -199,7 +199,9 @@ contract PolicyVaultAttestationTest is Test {
 
     function test_RevertWhen_OldCreatePolicyRejectsAttestationType() public {
         vm.prank(owner);
-        vm.expectRevert(PolicyVault.UseCreateAttestationPolicy.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyVault.UseTypedCreator.selector, PolicyVault.ConditionType.Attestation)
+        );
         vault.createPolicy(
             recipient,
             ONE_USDC,
