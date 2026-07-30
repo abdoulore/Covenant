@@ -88,9 +88,9 @@ Policy 0, 0.50 USDC, attester `0x22b28ec95Ce8BB421ad2E3E7a3E6F8170D40ad05`, paid
 
 ## Oracle
 
-The fourth condition type, releasing when a Chainlink Data Feed crosses a threshold, is built and tested (21 contract tests, fail-closed on stale, zero, negative, incomplete, or reverting feed data) with an executor keeper that discovers oracle policies, polls, and calls release when the price crosses. Chainlink Automation is not available on Arc, which is why the keeper exists.
+The fourth condition type, releasing when a Chainlink Data Feed crosses a threshold, is built and tested (21 contract tests, fail-closed on stale, zero, negative, incomplete, or reverting feed data) with an executor keeper that discovers oracle policies, polls, and calls release when the price crosses. Chainlink Automation is not available on Arc, which is why the keeper exists. The keeper is feed-agnostic and is proven against a mock aggregator in tests.
 
-It is not yet demoed onchain: the specific Arc testnet Data Feed contract addresses, decimals, and heartbeats still need to be confirmed. The keeper is feed-agnostic and is proven against a mock aggregator in tests. See docs/specs for the design.
+It is not demoed onchain, and the reason is a verified fact about Arc rather than a missing lookup. Arc testnet does not publish Chainlink push Data Feed addresses today: Chainlink's own `feeds-arc-testnet.json` returns 404, Arc does not appear in the Data Feeds address directory, and the Arc x Chainlink announcement presents Data Streams and CCIP as the live oracle surface. Data Streams is a pull-based model, where a signed report is fetched off-chain and verified on-chain, which reads differently from the on-chain `AggregatorV3Interface` this condition uses. A live oracle demo therefore waits on either Arc publishing push feeds or a Data Streams rework of the condition. The condition and keeper are correct for a push-feed chain; this is an infrastructure gap on Arc, not a defect. See docs/specs for the design.
 
 ## Failure paths
 
