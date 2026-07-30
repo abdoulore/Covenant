@@ -70,11 +70,14 @@ executor/    TypeScript service: event watcher, settlement engine, Circle integr
 docs/        RESULTS.md, onchain proof for every claim
 ```
 
+Code comments cite `docs/VERIFICATIONS.md` and `docs/DECISIONS.md`, the internal records of what was verified against Circle and Arc documentation and why each architectural call was made. Those are working documents and are not part of this repository. The findings that matter to the code are restated in the comments themselves, so nothing here depends on reading them.
+
 ## Running it
 
 Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.example`). Testnet only.
 
 ```bash
+git submodule update --init # OpenZeppelin, required before the contracts will build
 npm install                 # install executor dependencies
 npm test                    # 127 tests: Foundry contract suite and executor suite
 
