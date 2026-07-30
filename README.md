@@ -25,7 +25,7 @@ flowchart TB
     C --> PB[mint direct to recipient on Base Sepolia]
 ```
 
-- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports a timelock and an N-of-M approval condition, and reverts if release is attempted before the condition holds.
+- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Chainlink price feed crossing a threshold. Release reverts if the condition is not met.
 - **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written before any funds move, so a restart never pays twice.
 - **Wallets** are Circle developer-controlled wallets for the treasury, executor, and recipient roles, behind one interface so a later move to user-controlled wallets touches no settlement logic.
 
@@ -53,14 +53,15 @@ Everything is proven on live testnet. Full transaction hashes and explorer links
 
 | Result | Value |
 | --- | --- |
-| FX settlement on Arc, release to paid | 13.7 seconds |
-| Cross-chain settlement, Arc to Base Sepolia | 38.4 seconds |
-| PolicyVault deployment cost | 0.0742 USDC |
+| FX settlement on Arc, release to paid | 16.6 seconds |
+| Cross-chain settlement, Arc to Base Sepolia | 28.8 seconds |
+| Attestation settlement, signed release to paid | 6.8 seconds |
+| PolicyVault deployment cost | 0.0592 USDC |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 127, across contract and executor |
+| Automated tests | 178, across contract and executor |
 
-Deployed PolicyVault: [`0x248391FE29318301a8CD957d28E58b7502387A22`](https://testnet.arcscan.app/address/0x248391FE29318301a8CD957d28E58b7502387A22) on Arc Testnet (chain id 5042002).
+Deployed PolicyVault: [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) on Arc Testnet (chain id 5042002). Every proof in [docs/RESULTS.md](docs/RESULTS.md) is on this one contract.
 
 ## Repository layout
 
@@ -70,7 +71,7 @@ executor/    TypeScript service: event watcher, settlement engine, Circle integr
 docs/        RESULTS.md, onchain proof for every claim
 ```
 
-Code comments cite `docs/VERIFICATIONS.md` and `docs/DECISIONS.md`, the internal records of what was verified against Circle and Arc documentation and why each architectural call was made. Those are working documents and are not part of this repository. The findings that matter to the code are restated in the comments themselves, so nothing here depends on reading them.
+Code comments cite internal working documents under `docs/` (`VERIFICATIONS.md`, `DECISIONS.md`, and `specs/`): the records of what was verified against Circle and Arc documentation, why each architectural call was made, and the Phase 2 design. Those are not part of this repository. The findings that matter to the code are restated in the comments themselves, so nothing here depends on reading them.
 
 ## Running it
 
@@ -79,16 +80,19 @@ Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.exampl
 ```bash
 git submodule update --init # OpenZeppelin, required before the contracts will build
 npm install                 # install executor dependencies
-npm test                    # 127 tests: Foundry contract suite and executor suite
+npm test                    # 178 tests: Foundry contract suite and executor suite
 
 npm run wallets:write       # create the Circle developer-controlled wallets
 npm run deploy              # deploy PolicyVault to Arc testnet
-npm run canary             # stage and settle both archetypes end to end
-npm run failure-path       # demonstrate the onchain revert when a condition is unmet
+npm run canary              # stage and settle the FX and cross-chain archetypes
+npm run demo:attestation    # release a policy on a signed attestation, end to end
+npm run failure-path        # demonstrate the onchain revert when a condition is unmet
 ```
 
 Fund the treasury and executor wallets from the Circle faucet at faucet.circle.com on Arc Testnet before running the canary. USDC is gas on Arc, so the executor needs a working balance on top of the settlement amounts.
 
 ## Status
 
-Phase 1, the settlement canary, is complete: both payment archetypes settle end to end onchain, the failure path is proven, and the recipient is never short-changed. The system runs on testnet only.
+Phase 1, the settlement canary, is complete: both payment archetypes settle end to end onchain, the failure path is proven, and the recipient is never short-changed.
+
+Phase 2 has added two condition types. Attestation, where an attester's EIP-712 signature releases a policy, is proven onchain. Oracle, where a Chainlink price feed crossing a threshold releases a policy, is built and tested, with an executor keeper that polls and releases, but is not yet demoed onchain: the specific Arc Data Feed addresses still need to be confirmed. The system runs on testnet only.

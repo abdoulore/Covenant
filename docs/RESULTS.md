@@ -3,7 +3,7 @@
 Onchain proof for every claim this project makes. Each entry carries a transaction hash and an explorer link. Nothing is listed that has not actually executed.
 
 Network: Arc Testnet (chain id 5042002) and Base Sepolia (84532). Testnet only.
-Run date: 2026-07-23. Reproduce with `npm run canary`.
+Run date: 2026-07-27. Every proof below is on one contract, PolicyVault v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1).
 
 ---
 
@@ -13,65 +13,84 @@ A payment that releases only when an onchain condition is met, then routes itsel
 
 | Claim | Evidence |
 | --- | --- |
-| Conditional release enforced onchain | policy 12 and 13 releases, below |
-| Release refused when condition unmet | reverted transaction, status 0, below |
-| Automatic FX settlement | 0.50 USDC to 0.401787 EURC, paid to recipient |
+| Conditional release enforced onchain | policy 1, 2, and 0 releases, below |
+| Release refused when condition unmet | policy 3, reverted transaction, status 0 |
+| Automatic FX settlement | 0.50 USDC to 0.377398 EURC, paid to recipient |
 | Automatic cross-chain settlement | Arc to Base Sepolia via CCTP, paid to recipient |
+| Release on a signed attestation | EIP-712 signature, policy 0, paid to recipient |
 | Recipient needs no gas token | Base Sepolia recipient paid holding 0 ETH |
-| No double payment on restart | claim-before-work store, 73 executor tests |
+| Recipient never short-changed | cross-chain recipient received 0.606602 for a 0.5 policy |
+| No double payment on restart | claim-before-work store, 85 executor tests |
+
+## The four condition types
+
+A policy releases when its condition is met. PolicyVault enforces all four onchain:
+
+- **Timelock**: releasable after a timestamp. Demonstrated in the failure path below.
+- **Approval**: releasable after N-of-M named approvers call approve. Used by both canary policies.
+- **Attestation**: releasable when a named attester signs an EIP-712 statement. Policy 0 below.
+- **Oracle**: releasable when a Chainlink Data Feed crosses a threshold. Built and tested, not yet demoed onchain (see the Oracle section).
 
 ## Deployment
 
 | Item | Value |
 | --- | --- |
-| Contract | PolicyVault |
-| Address | [0x248391FE29318301a8CD957d28E58b7502387A22](https://testnet.arcscan.app/address/0x248391FE29318301a8CD957d28E58b7502387A22) |
-| Deploy tx | [0xfd20eecf...2ae39e8](https://testnet.arcscan.app/tx/0xfd20eecf03e96b130dc337dcc73aa7ed533f55abe369da38588ee75962ae39e8) |
-| Bytecode | 5,808 bytes |
-| Cost | **0.0742 USDC** |
+| Contract | PolicyVault v2 (four condition types) |
+| Address | [0xB702404EA947aec698323Cd42989CA6168f209D1](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) |
+| Deploy tx | [0x63b793fa...1d03b62475e](https://testnet.arcscan.app/tx/0x63b793fa52f9809e5a62832be635d537e3e20ae07a6ed2595d6cb1d03b62475e) |
+| Cost | **0.0592 USDC** |
 
-Constructor state read back from chain after deploy: `usdc()` is the 6 decimal ERC-20 view, `executor()` and `owner()` are the intended wallets, `nextPolicyId()` was 0.
-
-Deployment cost is denominated in dollars because USDC is the native gas token on Arc. Deploying a treasury contract cost seven cents, known at the moment of deployment rather than exposed to a separate volatile asset.
+Deployment cost is denominated in dollars because USDC is the native gas token on Arc. Deploying a treasury contract with four condition types cost six cents, known at the moment of deployment rather than exposed to a separate volatile asset.
 
 ## The canary
 
-`npm run canary` stages two policies and then settles them by watching the chain. Nothing tells the executor what to do: it discovers work by scanning for `PolicyReleased`, exactly as it would if the policies had been created by someone else.
+`npm run canary` stages two policies and settles them by watching the chain. Nothing tells the executor what to do: it discovers work by scanning for `PolicyReleased`, exactly as it would if the policies had been created by someone else. Both use the approval condition.
 
 Two archetypes rather than one combined flow because EURC has no cross-chain route. CCTP and App Kit Bridge carry USDC only, and Arc is the sole swap-enabled testnet, so a single settlement delivering EURC to another chain is not buildable today.
 
-### Policy 12, FX archetype, entirely on Arc
+### Policy 1, FX archetype, entirely on Arc
 
 0.50 USDC released against a 1-of-1 approval condition, paid to the recipient in EURC.
 
 | Step | Transaction | Note |
 | --- | --- | --- |
-| release | [0x82cab2ab...577c3e18](https://testnet.arcscan.app/tx/0x82cab2ab326af340abbd4d5d5ef5d4d0034e69f25a948943b6901d4c577c3e18) | condition met, funds to executor |
-| fx | [0x40ed7205...adbf0c65](https://testnet.arcscan.app/tx/0x40ed7205957dff8891800c2fc2641e2d10765d630a3bc061436970a6adbf0c65) | 0.50 USDC to 0.401787 EURC |
-| payout | [0xee5559e3...b59b7de5](https://testnet.arcscan.app/tx/0xee5559e3c4f2232a6167732009816ae56f5b1c4b966e9686bc5b10a0b59b7de5) | EURC to recipient |
+| release | [0xd5a5008b...4a08c27c9](https://testnet.arcscan.app/tx/0xd5a5008b280fcfbe8d2713fc0f4383eadbfadbc038cec4fe504e77d4a08c27c9) | condition met, funds to executor |
+| fx | [0x311675d5...cff251d3bb35](https://testnet.arcscan.app/tx/0x311675d57035a9b0bcbea302063c98fc8a5825aa336872a22f98cff251d3bb35) | 0.50 USDC to 0.377398 EURC |
+| payout | [0xace9dcdf...bc89f1cb995](https://testnet.arcscan.app/tx/0xace9dcdf797fc9c7efd96391ed17e4d5996f62210f0cfad8eab1dbc89f1cb995) | EURC to recipient |
 
-**Settled in 13.7 seconds**, release to recipient paid.
+**Settled in 16.6 seconds**, release to recipient paid.
 
-### Policy 13, cross-chain archetype, Arc to Base Sepolia
+### Policy 2, cross-chain archetype, Arc to Base Sepolia
 
-0.50 USDC released against a 1-of-1 approval condition, paid to the recipient on Base Sepolia. The burn is grossed up so the recipient receives at least the policy amount after the forwarder fee, see the gross-up section below.
+0.50 USDC released against a 1-of-1 approval condition, paid to the recipient on Base Sepolia. The burn is grossed up so the recipient receives at least the policy amount after the forwarder fee.
 
 | Step | Transaction | Note |
 | --- | --- | --- |
-| release | [0x868cc758...4f5d865d](https://testnet.arcscan.app/tx/0x868cc758453a38aaccb702f5671a525b936737482b838fad3109948b4f5d865d) | condition met, funds to executor |
-| bridge | [0x9c0deca1...81a3d1e9](https://sepolia.basescan.org/tx/0x9c0deca158c4791d1939a29cdff48f29015ab376d2a821b5defc700f81a3d1e9) | CCTP burn on Arc, mint to recipient on Base Sepolia |
+| release | [0xf2ef10c2...5c6131bcee59](https://testnet.arcscan.app/tx/0xf2ef10c2dd7a15cd4f69e0cf6689e3eb175b632cafbae7b750f85c6131bcee59) | condition met, funds to executor |
+| bridge | [0x68263cfc...f020253844fe](https://sepolia.basescan.org/tx/0x68263cfcf2f38df680b769a65697cab9b3677f3cabba1b21ae28f020253844fe) | CCTP burn on Arc, mint to recipient on Base Sepolia |
 
-**Settled in 38.4 seconds.** One transaction, not two: the mint lands directly on the recipient, so it is the payout.
+**Settled in 28.8 seconds.** One transaction, not two: the mint lands directly on the recipient, so it is the payout.
 
-### Verified by balance, not by log
+## Attestation
 
-A settlement record claiming success is not proof. The cross-chain recipient's balance, read from chain before and after policy 13:
+`npm run demo:attestation` proves the attestation condition end to end. An ephemeral attester key signs the exact EIP-712 digest the contract exposes via `attestationDigest`, so the signature is bound to this contract, this chain, and this policyId. The attester holds no funds and needs no gas: `attest` is permissionless to submit.
 
-| Recipient | Chain | Delivered by policy 13 | Native gas held |
-| --- | --- | --- | --- |
-| 0x2719a808...67b6eabb | Base Sepolia | **0.746478 USDC** for a 0.500000 policy | **0 ETH** |
+Policy 0, 0.50 USDC, attester `0x22b28ec95Ce8BB421ad2E3E7a3E6F8170D40ad05`, paid in USDC on Arc.
 
-Two things this proves. The recipient received **more** than the policy amount, not less, so the gross-up did its job: the promise "recipient receives at least the amount" held onchain. And the wallet **has never held a single wei of ETH** and was paid anyway, because Circle's forwarder submitted the mint. A recipient on a conventional chain does not need that chain's gas token to be paid.
+| Step | Transaction | Note |
+| --- | --- | --- |
+| create | [0x5eef3327...ef4ca5e1883](https://testnet.arcscan.app/tx/0x5eef33270fceda3c1648313be3bc243c6ce67d0e07d5feb1fff8def4ca5e1883) | attestation policy 0 |
+| attest | [0xaa1e518a...0f0d438e5659](https://testnet.arcscan.app/tx/0xaa1e518abc7cb2109b381f76735312ba92b63182a9d89d25a0460f0d438e5659) | EIP-712 signature verified onchain |
+| release | [0x3f3165e8...bb6a51ba8eed](https://testnet.arcscan.app/tx/0x3f3165e8c58288264691fb3eaf2fdaf2c6e87627840e93c9ecb9bb6a51ba8eed) | condition met |
+| payout | [0xed694316...4308cbd3c10247](https://testnet.arcscan.app/tx/0xed694316de606aa2d65f1c4e1215e5802de80739015b4f3f124308cbd3c10247) | USDC to recipient |
+
+**Settled in 6.8 seconds.** Read back from chain: policy 0 conditionType Attestation, status Executed, `attested` true.
+
+## Oracle
+
+The fourth condition type, releasing when a Chainlink Data Feed crosses a threshold, is built and tested (21 contract tests, fail-closed on stale, zero, negative, incomplete, or reverting feed data) with an executor keeper that discovers oracle policies, polls, and calls release when the price crosses. Chainlink Automation is not available on Arc, which is why the keeper exists.
+
+It is not yet demoed onchain: the specific Arc testnet Data Feed contract addresses, decimals, and heartbeats still need to be confirmed. The keeper is feed-agnostic and is proven against a mock aggregator in tests. See docs/specs for the design.
 
 ## Failure paths
 
@@ -79,13 +98,14 @@ Two distinct failures are demonstrated, because a payment system that only prove
 
 ### Condition not met, refused onchain
 
-Policy 1, timelock with a release time 24 hours out, release attempted immediately.
+Policy 3, a timelock with a release time 24 hours out, release attempted immediately.
 
 | Item | Value |
 | --- | --- |
-| `checkCondition(1)` | false |
-| Premature release | [0x815e2680...ecb51ae3](https://testnet.arcscan.app/tx/0x815e2680d0181b0e994f5d8a4087f197466497d1b7f9acc279ecd76decb51ae3) |
-| Result | **reverted**, status 0, 31,496 gas consumed |
+| Create | [0x75149f9b...4e0ee86baa7e](https://testnet.arcscan.app/tx/0x75149f9b5c27b27a99652cf7580e5f0679be34764316a067f59a4e0ee86baa7e) |
+| `checkCondition(3)` | false |
+| Premature release | [0x26e1acf0...3826664019ee](https://testnet.arcscan.app/tx/0x26e1acf092070b3f3731662aeb2c549d0bff50daee3a102ad6cf3826664019ee) |
+| Result | **reverted**, status 0, 31,444 gas consumed |
 
 The contract refused to move funds whose condition was not satisfied, and it refused onchain where anyone can verify it.
 
@@ -97,17 +117,27 @@ Found during development, fixed, and covered by tests. A bridge completed onchai
 
 The engine now distinguishes a leg that failed to execute from a leg that executed and failed to record. The first is retried; the second halts the settlement and demands manual reconciliation, because retrying it would repeat a completed transfer.
 
+## Verified by balance, not by log
+
+A settlement record claiming success is not proof. Balances read from chain before and after this run:
+
+| Recipient | Chain | Delivered | Native gas held |
+| --- | --- | --- | --- |
+| attestation recipient | Arc | 0.500000 USDC (0.5 to 1.0) | n/a, gas is USDC |
+| FX recipient | Arc | 0.377398 EURC | n/a, gas is USDC |
+| cross-chain recipient | Base Sepolia | **0.606602 USDC** for a 0.5 policy | **0 ETH** |
+
+The cross-chain recipient received **more** than the policy amount, not less, so the gross-up did its job. And that wallet **has never held a single wei of ETH** and was paid anyway, because Circle's forwarder submitted the mint. A recipient on a conventional chain does not need that chain's gas token to be paid.
+
 ## Costs and timings
 
 | Measure | Value |
 | --- | --- |
-| Same-chain FX settlement, release to paid | 13.7 s |
-| Cross-chain settlement, release to paid | 38.4 s |
-| Individual Arc transaction | ~3 s including Circle API round trip |
-| PolicyVault deployment | 0.0742 USDC |
-| FX leg, gas only | 0.017309 USDC |
-| Payout leg, gas only | 0.001904 USDC |
-| Cross-chain forwarder fee | 0.053247 USDC, flat |
+| Attestation settlement, signed release to paid | 6.8 s |
+| FX settlement, release to paid | 16.6 s |
+| Cross-chain settlement, release to paid | 28.8 s |
+| PolicyVault v2 deployment | 0.0592 USDC |
+| Cross-chain forwarder fee | 0.053301 USDC, flat |
 
 ### The forwarder fee is flat, not proportional
 
@@ -115,38 +145,41 @@ Measured with `estimateBridge` across five amounts on the same route:
 
 | Amount bridged | Fee | As a percentage |
 | --- | --- | --- |
-| 0.50 USDC | 0.053245 | 10.649% |
-| 1.00 USDC | 0.053247 | 5.325% |
-| 10.00 USDC | 0.053247 | 0.532% |
-| 100.00 USDC | 0.053247 | 0.053% |
-| 1000.00 USDC | 0.053247 | 0.005% |
+| 0.50 USDC | ~0.0533 | 10.6% |
+| 1.00 USDC | ~0.0533 | 5.3% |
+| 10.00 USDC | ~0.0533 | 0.53% |
+| 100.00 USDC | ~0.0533 | 0.053% |
+| 1000.00 USDC | ~0.0533 | 0.005% |
 
-A fixed relay cost, not a percentage fee. The canary's 0.50 USDC test amounts make it look punitive; at treasury-sized amounts it is negligible. Recorded because reading the first row alone would badly mislead.
+A fixed relay cost, not a percentage fee. The canary's 0.50 USDC test amounts make it look punitive; at treasury-sized amounts it is negligible.
 
-### Resolved: the recipient never receives less than the policy amount
+### The recipient never receives less than the policy amount
 
-An earlier run paid the cross-chain recipient 0.399847 against a 0.500000 policy, because the forwarder fee was deducted from the mint and the mint went straight to the recipient with no later step to correct it.
-
-The fix, now implemented, grosses up the burn: the executor burns the policy amount plus an allowance sized above the quoted fee, from its own working balance, so the recipient receives at least the policy amount. Policy 13's record:
+The forwarder fee is deducted from the minted amount, and the mint lands directly on the recipient, so there is no later step to correct a shortfall. The executor grosses up the burn: it burns the policy amount plus an allowance sized above the quoted fee, from its own working balance, so the recipient receives at least the policy amount. Policy 2's record:
 
 | Field | Value |
 | --- | --- |
 | policy amount | 0.500000 |
-| fee quote | 0.099902 |
-| allowance burned on top | 0.299706 |
-| actual fee charged | 0.053228 |
-| **delivered to recipient** | **0.746478** |
+| fee quote | 0.053301 |
+| allowance burned on top | 0.159903 |
+| actual fee charged | 0.053301 |
+| **delivered to recipient** | **0.606602** |
 | divergence flagged | no |
 
-The recipient received more than the policy amount because the allowance exceeded the actual fee, which is the safe direction: nobody is short-changed. The quote is a noisy predictor, seen at 0.053 with a 0.100 actual on one run and 0.100 with a 0.053 actual here, so the allowance is deliberately generous. On treasury-sized transfers the fixed ~0.30 allowance is a rounding error; on these 0.50 test amounts it is visible overpay. Every settlement records quote against actual so the multiplier can be tightened from data.
+The recipient received more than the policy amount because the allowance exceeded the actual fee, which is the safe direction: nobody is short-changed. On treasury-sized transfers the fixed allowance is a rounding error; on these 0.50 test amounts it is visible overpay. Every settlement records quote against actual so the multiplier can be tightened from data.
 
 ## Reproducing
 
 ```
-npm run wallets:write   # create the developer-controlled wallets
-npm run deploy          # deploy PolicyVault to Arc testnet
-npm run canary          # stage and settle both archetypes
-npm run failure-path    # demonstrate the onchain revert
+git submodule update --init   # OpenZeppelin
+npm install
+npm test                      # 178 tests: Foundry contract suite and executor suite
+
+npm run wallets:write         # create the Circle developer-controlled wallets
+npm run deploy                # deploy PolicyVault to Arc testnet
+npm run canary                # FX and cross-chain archetypes
+npm run demo:attestation      # release on a signed attestation
+npm run failure-path          # the onchain revert when a condition is unmet
 ```
 
 Requires a filled `.env`, see `.env.example`. Testnet only.
