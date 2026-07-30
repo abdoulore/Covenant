@@ -13,12 +13,12 @@ A payment that releases only when an onchain condition is met, then routes itsel
 
 | Claim | Evidence |
 | --- | --- |
-| Conditional release enforced onchain | policy 10 and 11 releases, below |
+| Conditional release enforced onchain | policy 12 and 13 releases, below |
 | Release refused when condition unmet | reverted transaction, status 0, below |
-| Automatic FX settlement | 0.50 USDC to 0.377028 EURC, paid to recipient |
+| Automatic FX settlement | 0.50 USDC to 0.401787 EURC, paid to recipient |
 | Automatic cross-chain settlement | Arc to Base Sepolia via CCTP, paid to recipient |
 | Recipient needs no gas token | Base Sepolia recipient paid holding 0 ETH |
-| No double payment on restart | claim-before-work store, 58 executor tests |
+| No double payment on restart | claim-before-work store, 73 executor tests |
 
 ## Deployment
 
@@ -38,7 +38,7 @@ Deployment cost is denominated in dollars because USDC is the native gas token o
 
 `npm run canary` stages two policies and then settles them by watching the chain. Nothing tells the executor what to do: it discovers work by scanning for `PolicyReleased`, exactly as it would if the policies had been created by someone else.
 
-Two archetypes rather than one combined flow because EURC has no cross-chain route. CCTP and App Kit Bridge carry USDC only, and Arc is the sole swap-enabled testnet, so a single settlement delivering EURC to another chain is not buildable today. See DECISIONS.md D1.
+Two archetypes rather than one combined flow because EURC has no cross-chain route. CCTP and App Kit Bridge carry USDC only, and Arc is the sole swap-enabled testnet, so a single settlement delivering EURC to another chain is not buildable today.
 
 ### Policy 12, FX archetype, entirely on Arc
 
@@ -61,7 +61,7 @@ Two archetypes rather than one combined flow because EURC has no cross-chain rou
 | release | [0x868cc758...4f5d865d](https://testnet.arcscan.app/tx/0x868cc758453a38aaccb702f5671a525b936737482b838fad3109948b4f5d865d) | condition met, funds to executor |
 | bridge | [0x9c0deca1...81a3d1e9](https://sepolia.basescan.org/tx/0x9c0deca158c4791d1939a29cdff48f29015ab376d2a821b5defc700f81a3d1e9) | CCTP burn on Arc, mint to recipient on Base Sepolia |
 
-**Settled in 38.4 seconds.** One transaction, not two: the mint lands directly on the recipient, so it is the payout. See DECISIONS.md D7.
+**Settled in 38.4 seconds.** One transaction, not two: the mint lands directly on the recipient, so it is the payout.
 
 ### Verified by balance, not by log
 
@@ -89,7 +89,7 @@ Policy 1, timelock with a release time 24 hours out, release attempted immediate
 
 The contract refused to move funds whose condition was not satisfied, and it refused onchain where anyone can verify it.
 
-This transaction is signed by a raw EOA rather than a Circle wallet, deliberately. Circle developer-controlled wallets simulate before broadcasting and refuse to submit a transaction that would revert, failing with `ESTIMATION_ERROR` and producing no hash at all. Correct behaviour for a payments product, and incompatible with evidencing a revert. Forcing an explicit gas limit skips estimation and puts the failing transaction on chain. See VERIFICATIONS.md V14.
+This transaction is signed by a raw EOA rather than a Circle wallet, deliberately. Circle developer-controlled wallets simulate before broadcasting and refuse to submit a transaction that would revert, failing with `ESTIMATION_ERROR` and producing no hash at all. Correct behaviour for a payments product, and incompatible with evidencing a revert. Forcing an explicit gas limit skips estimation and puts the failing transaction on chain.
 
 ### Leg succeeded, recording failed
 
@@ -101,8 +101,8 @@ The engine now distinguishes a leg that failed to execute from a leg that execut
 
 | Measure | Value |
 | --- | --- |
-| Same-chain FX settlement, release to paid | 16.2 s |
-| Cross-chain settlement, release to paid | 27.8 s |
+| Same-chain FX settlement, release to paid | 13.7 s |
+| Cross-chain settlement, release to paid | 38.4 s |
 | Individual Arc transaction | ~3 s including Circle API round trip |
 | PolicyVault deployment | 0.0742 USDC |
 | FX leg, gas only | 0.017309 USDC |
@@ -138,7 +138,7 @@ The fix, now implemented, grosses up the burn: the executor burns the policy amo
 | **delivered to recipient** | **0.746478** |
 | divergence flagged | no |
 
-The recipient received more than the policy amount because the allowance exceeded the actual fee, which is the safe direction: nobody is short-changed. The quote is a noisy predictor, seen at 0.053 with a 0.100 actual on one run and 0.100 with a 0.053 actual here, so the allowance is deliberately generous. On treasury-sized transfers the fixed ~0.30 allowance is a rounding error; on these 0.50 test amounts it is visible overpay. Every settlement records quote against actual so the multiplier can be tightened from data. See DECISIONS.md D6 and D7.
+The recipient received more than the policy amount because the allowance exceeded the actual fee, which is the safe direction: nobody is short-changed. The quote is a noisy predictor, seen at 0.053 with a 0.100 actual on one run and 0.100 with a 0.053 actual here, so the allowance is deliberately generous. On treasury-sized transfers the fixed ~0.30 allowance is a rounding error; on these 0.50 test amounts it is visible overpay. Every settlement records quote against actual so the multiplier can be tightened from data.
 
 ## Reproducing
 
