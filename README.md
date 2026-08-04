@@ -60,7 +60,7 @@ Everything is proven on live testnet. Full transaction hashes and explorer links
 | PolicyVault deployment cost | 0.0592 USDC |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 178, across contract and executor |
+| Automated tests | 182, across contract and executor |
 
 Deployed PolicyVault: [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) on Arc Testnet (chain id 5042002). Every proof in [docs/RESULTS.md](docs/RESULTS.md) is on this one contract.
 
@@ -81,7 +81,7 @@ Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.exampl
 ```bash
 git submodule update --init # OpenZeppelin, required before the contracts will build
 npm install                 # install executor dependencies
-npm test                    # 178 tests: Foundry contract suite and executor suite
+npm test                    # 182 tests: Foundry contract suite and executor suite
 
 npm run wallets:write       # create the Circle developer-controlled wallets
 npm run deploy              # deploy PolicyVault to Arc testnet

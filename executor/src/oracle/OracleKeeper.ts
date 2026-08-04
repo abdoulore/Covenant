@@ -7,6 +7,11 @@
  * notices. It watches for oracle policies, and when one becomes releasable it calls release,
  * which is permissionless. From there the existing PolicyReleased flow settles it as usual.
  *
+ * With a pull oracle (Pyth on Arc) there is no live price onchain to read: the keeper must post a
+ * fresh signed price before checkCondition can see it. When a Pyth client is configured, the keeper
+ * fetches the price offchain, keyless, and only when it will cross the policy's threshold does it
+ * pay to post it, then release. Without a Pyth client the keeper assumes a push feed and only reads.
+ *
  * The keeper does not decide whether funds move. The vault does, in checkCondition. The keeper
  * only asks, and forwards a yes. If it asked wrongly, release reverts and nothing moves.
  *
@@ -41,6 +46,37 @@ export interface VaultReader {
   statusOf(policyId: bigint): Promise<PolicyStatus>;
   /** Send a release transaction, returning its hash. Permissionless onchain. */
   release(policyId: bigint): Promise<string>;
+  /**
+   * Oracle configuration for a policy. `priceId` is the Pyth feed id when the policy's feed is a
+   * Pyth wrapper (PythAggregatorV3), or null for a plain push feed, which needs no offchain refresh.
+   */
+  oracleParams(policyId: bigint): Promise<OracleParams>;
+  /** Refresh a Pyth-backed feed onchain (updateFeeds, paying the update fee), returning the tx hash. */
+  refreshFeed(feed: `0x${string}`, updateData: `0x${string}`[]): Promise<string>;
+}
+
+/** PolicyVault.Comparator.Gte. Lte is 1. */
+export const COMPARATOR_GTE = 0;
+
+export interface OracleParams {
+  feed: `0x${string}`;
+  /** Pyth feed id if the feed is a Pyth wrapper, else null. */
+  priceId: `0x${string}` | null;
+  comparator: number;
+  /** Threshold in the feed's own decimals, the same scale Pyth reports the price in. */
+  threshold: bigint;
+}
+
+export interface PythPrice {
+  /** Latest price in the feed's decimals (the raw Pyth integer). */
+  price: bigint;
+  /** The signed update blob to submit onchain. */
+  updateData: `0x${string}`[];
+}
+
+/** Offchain Pyth price source, keyless (Hermes in production, a fake in tests). */
+export interface PythClient {
+  fetch(priceId: string): Promise<PythPrice>;
 }
 
 export interface OracleKeeperOptions {
@@ -51,6 +87,8 @@ export interface OracleKeeperOptions {
   confirmations?: bigint;
   pollIntervalMs?: number;
   log?: (message: string) => void;
+  /** Offchain price source for pull oracles. When absent, the keeper only reads (push-feed mode). */
+  pyth?: PythClient;
 }
 
 export interface ReleaseOutcome {
@@ -66,6 +104,7 @@ export class OracleKeeper {
   private readonly confirmations: bigint;
   private readonly pollIntervalMs: number;
   private readonly log: (message: string) => void;
+  private readonly pyth?: PythClient;
   private stopped = false;
 
   constructor(opts: OracleKeeperOptions) {
@@ -76,6 +115,7 @@ export class OracleKeeper {
     this.confirmations = opts.confirmations ?? 2n;
     this.pollIntervalMs = opts.pollIntervalMs ?? 5_000;
     this.log = opts.log ?? (() => {});
+    this.pyth = opts.pyth;
 
     if (this.maxSpan > 10_000n) {
       throw new Error(`maxSpan ${this.maxSpan} exceeds Arc's 10,000 block getLogs cap`);
@@ -131,7 +171,57 @@ export class OracleKeeper {
         continue;
       }
 
-      if (status !== PolicyStatus.Releasable) continue; // still Pending, price has not crossed
+      // Pull oracles (Pyth) hold no live price onchain, so the status read above is stale and will
+      // not flip on its own. When a Pyth client is configured and the policy's feed is a Pyth
+      // wrapper, refresh it here first, but only after a free offchain price check says the
+      // threshold will cross, so the keeper never pays to refresh a feed that will not release.
+      if (this.pyth) {
+        let params: OracleParams;
+        try {
+          params = await this.reader.oracleParams(id);
+        } catch (err) {
+          this.log(`oracle policy ${id}: oracle params read failed, will retry: ${message(err)}`);
+          continue;
+        }
+
+        if (params.priceId) {
+          let price: PythPrice;
+          try {
+            price = await this.pyth.fetch(params.priceId);
+          } catch (err) {
+            this.log(`oracle policy ${id}: price fetch failed, will retry: ${message(err)}`);
+            continue;
+          }
+
+          const crosses =
+            params.comparator === COMPARATOR_GTE
+              ? price.price >= params.threshold
+              : price.price <= params.threshold;
+          if (!crosses) {
+            this.log(`oracle policy ${id}: price ${price.price} does not cross ${params.threshold}, not refreshing`);
+            continue;
+          }
+
+          try {
+            const refreshTx = await this.reader.refreshFeed(params.feed, price.updateData);
+            this.log(`oracle policy ${id}: refreshed Pyth feed in ${refreshTx}`);
+          } catch (err) {
+            this.log(`oracle policy ${id}: feed refresh failed, will retry: ${message(err)}`);
+            continue;
+          }
+
+          // Re-read against the freshly posted price. checkCondition is still the authority.
+          try {
+            status = await this.reader.statusOf(id);
+          } catch (err) {
+            this.log(`oracle policy ${id}: status read after refresh failed, will retry: ${message(err)}`);
+            continue;
+          }
+        }
+        // params.priceId null: a plain push feed, which needs no refresh; use the status read above.
+      }
+
+      if (status !== PolicyStatus.Releasable) continue; // not funded yet, or the price moved back
 
       try {
         const txHash = await this.reader.release(id);

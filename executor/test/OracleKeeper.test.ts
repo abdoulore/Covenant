@@ -8,6 +8,9 @@ import {
   ORACLE_CONDITION_TYPE,
   PolicyStatus,
   type CreatedPolicy,
+  type OracleParams,
+  type PythClient,
+  type PythPrice,
   type VaultReader,
 } from "../src/oracle/OracleKeeper.js";
 
@@ -28,7 +31,11 @@ class FakeReader implements VaultReader {
   head: bigint;
   created: FakeCreated[];
   statuses = new Map<string, PolicyStatus>();
+  /** Optional per-policy status sequence, so a read can differ before and after a feed refresh. */
+  statusQueue = new Map<string, PolicyStatus[]>();
+  params = new Map<string, OracleParams>();
   releaseCalls: bigint[] = [];
+  refreshCalls: `0x${string}`[] = [];
   releaseThrow = new Set<string>();
   statusThrow = new Set<string>();
 
@@ -49,6 +56,8 @@ class FakeReader implements VaultReader {
 
   async statusOf(policyId: bigint): Promise<PolicyStatus> {
     if (this.statusThrow.has(policyId.toString())) throw new Error("rpc error");
+    const queue = this.statusQueue.get(policyId.toString());
+    if (queue && queue.length > 0) return queue.shift()!;
     return this.statuses.get(policyId.toString()) ?? PolicyStatus.Pending;
   }
 
@@ -57,11 +66,54 @@ class FakeReader implements VaultReader {
     this.releaseCalls.push(policyId);
     return `0x${policyId.toString().padStart(4, "0")}`;
   }
+
+  async oracleParams(policyId: bigint): Promise<OracleParams> {
+    return (
+      this.params.get(policyId.toString()) ?? {
+        feed: "0x0000000000000000000000000000000000000000",
+        priceId: null,
+        comparator: 0,
+        threshold: 0n,
+      }
+    );
+  }
+
+  async refreshFeed(feed: `0x${string}`, _updateData: `0x${string}`[]): Promise<string> {
+    this.refreshCalls.push(feed);
+    return "0xrefresh";
+  }
 }
+
+/** Offchain price source stub. Returns a fixed price and records the feeds it was asked about. */
+class FakePyth implements PythClient {
+  calls: string[] = [];
+  constructor(
+    private readonly price: bigint,
+    private readonly data: `0x${string}`[] = ["0xabcd"],
+  ) {}
+  async fetch(priceId: string): Promise<PythPrice> {
+    this.calls.push(priceId);
+    return { price: this.price, updateData: this.data };
+  }
+}
+
+const PYTH_FEED = "0x00000000000000000000000000000000000000Fe" as const;
+const pythParams = (comparator: number, threshold: bigint): OracleParams => ({
+  feed: PYTH_FEED,
+  priceId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+  comparator,
+  threshold,
+});
 
 async function keeperWith(reader: FakeReader): Promise<{ keeper: OracleKeeper; store: KeeperStore }> {
   const store = new KeeperStore(await storePath());
   const keeper = new OracleKeeper({ reader, store, deployBlock: 1n });
+  return { keeper, store };
+}
+
+async function keeperWithPyth(reader: FakeReader, pyth: PythClient): Promise<{ keeper: OracleKeeper; store: KeeperStore }> {
+  const store = new KeeperStore(await storePath());
+  const keeper = new OracleKeeper({ reader, store, deployBlock: 1n, pyth });
   return { keeper, store };
 }
 
@@ -191,6 +243,64 @@ describe("OracleKeeper", () => {
     // Policy 1 is released even though the discovery cursor is long past the block that created
     // it: the tracked set survived the restart.
     expect(reader.releaseCalls).toEqual([1n]);
+  });
+
+  it("refreshes a Pyth feed and releases when the offchain price crosses the threshold", async () => {
+    const reader = new FakeReader(100n, [oracle(1n)]);
+    reader.params.set("1", pythParams(0 /* Gte */, 99_500_000n));
+    // Stale before the refresh, releasable after: the keeper must post the price, then re-read.
+    reader.statusQueue.set("1", [PolicyStatus.Pending, PolicyStatus.Releasable]);
+    const pyth = new FakePyth(99_985_376n); // 0.99985, crosses 0.995
+    const { keeper, store } = await keeperWithPyth(reader, pyth);
+
+    const out = await keeper.tick();
+
+    expect(pyth.calls.length).toBe(1);
+    expect(reader.refreshCalls).toEqual([PYTH_FEED]);
+    expect(reader.releaseCalls).toEqual([1n]);
+    expect(out).toEqual([{ policyId: "1", txHash: "0x0001" }]);
+    expect(await store.isHandled(1n)).toBe(true);
+  });
+
+  it("does not pay to refresh when the offchain price will not cross", async () => {
+    const reader = new FakeReader(100n, [oracle(1n)]);
+    reader.params.set("1", pythParams(0 /* Gte */, 99_500_000n));
+    reader.statuses.set("1", PolicyStatus.Pending);
+    const pyth = new FakePyth(99_000_000n); // 0.99, does not cross 0.995
+    const { keeper, store } = await keeperWithPyth(reader, pyth);
+
+    expect(await keeper.tick()).toEqual([]);
+    expect(pyth.calls.length).toBe(1); // it checked the price for free
+    expect(reader.refreshCalls).toEqual([]); // but did not pay to refresh
+    expect(reader.releaseCalls).toEqual([]);
+    expect(await store.isHandled(1n)).toBe(false); // stays tracked, may cross later
+  });
+
+  it("handles an Lte depeg trigger, refreshing only when the price drops below", async () => {
+    const reader = new FakeReader(100n, [oracle(1n)]);
+    reader.params.set("1", pythParams(1 /* Lte */, 99_000_000n));
+    reader.statusQueue.set("1", [PolicyStatus.Pending, PolicyStatus.Releasable]);
+    const pyth = new FakePyth(98_500_000n); // 0.985 <= 0.99, crosses
+    const { keeper } = await keeperWithPyth(reader, pyth);
+
+    await keeper.tick();
+
+    expect(reader.refreshCalls).toEqual([PYTH_FEED]);
+    expect(reader.releaseCalls).toEqual([1n]);
+  });
+
+  it("treats a feed with no Pyth id as a push feed: no fetch, no refresh, just release", async () => {
+    const reader = new FakeReader(100n, [oracle(1n)]);
+    reader.params.set("1", { feed: PYTH_FEED, priceId: null, comparator: 0, threshold: 0n });
+    reader.statuses.set("1", PolicyStatus.Releasable);
+    const pyth = new FakePyth(0n);
+    const { keeper } = await keeperWithPyth(reader, pyth);
+
+    await keeper.tick();
+
+    expect(pyth.calls.length).toBe(0); // no Pyth id, so no offchain fetch
+    expect(reader.refreshCalls).toEqual([]);
+    expect(reader.releaseCalls).toEqual([1n]); // push behavior: statusOf said Releasable
   });
 });
 
