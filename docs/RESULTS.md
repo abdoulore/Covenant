@@ -88,9 +88,29 @@ Policy 0, 0.50 USDC, attester `0x22b28ec95Ce8BB421ad2E3E7a3E6F8170D40ad05`, paid
 
 ## Oracle
 
-The fourth condition type, releasing when a Chainlink Data Feed crosses a threshold, is built and tested (21 contract tests, fail-closed on stale, zero, negative, incomplete, or reverting feed data) with an executor keeper that discovers oracle policies, polls, and calls release when the price crosses. Chainlink Automation is not available on Arc, which is why the keeper exists. The keeper is feed-agnostic and is proven against a mock aggregator in tests.
+The fourth condition type releases when a price feed crosses a threshold, and it is proven onchain against a live Pyth feed. The condition reads a Chainlink-style `AggregatorV3Interface` and is fail-closed: 21 contract tests cover stale, zero, negative, incomplete, and reverting feed data, all read as "not releasable."
 
-It is not demoed onchain, and the reason is a verified fact about Arc rather than a missing lookup. Arc testnet does not publish Chainlink push Data Feed addresses today: Arc is absent from Chainlink's Data Feeds directory, its feeds file for Arc returning 404 on Chainlink's live feeds host while other testnets resolve there, and the Arc x Chainlink announcement presents Data Streams and CCIP as the live oracle surface. Data Streams is a pull-based model, where a signed report is fetched off-chain and verified on-chain, which reads differently from the on-chain `AggregatorV3Interface` this condition uses. A live oracle demo therefore waits on either Arc publishing push feeds or a Data Streams rework of the condition. The condition and keeper are correct for a push-feed chain; this is an infrastructure gap on Arc, not a defect. See docs/specs for the design.
+Arc testnet does not publish Chainlink push Data Feeds, so there is no Chainlink feed to point at. Pyth, however, is a pull oracle that is deployed on Arc testnet and reachable with no credentials. Pyth ships an official `PythAggregatorV3` adapter that exposes a Pyth feed through the same `AggregatorV3Interface` the condition already reads, so the condition runs against live Pyth data with no change to the vault and no redeploy. The demo is a USDC/USD depeg-protection policy, on the same PolicyVault as every other proof. It is permissionless: the price update is fetched keyless from Pyth's Hermes service and the onchain update fee is 1 wei of native USDC.
+
+Wrapper: [PythAggregatorV3 0xe5095E...188E](https://testnet.arcscan.app/address/0xe5095EDb56bc24C20610DfE8Cc709FE63828188E), over Arc's Pyth contract 0x2880aB155794e7179c9eE2e38200202908C17B43.
+
+| Step | Tx | Note |
+| --- | --- | --- |
+| create | [0x1536de6d...bb82bd5](https://testnet.arcscan.app/tx/0x1536de6d661ca11c0fa06b918ce3efb4845e770afed824465b3ca7c40bb82bd5) | oracle policy 7, release while USDC/USD >= 0.995 |
+| update | [0x47d38440...b31b6a2f](https://testnet.arcscan.app/tx/0x47d38440306d8ec9c2ec76d71c6ebabc828d74639dd129a4c14adf8fb31b6a2f) | Pyth USDC/USD 0.99990, fee 1 wei native USDC |
+| release | [0x02173d2f...a3ff80d3](https://testnet.arcscan.app/tx/0x02173d2f68f74800ad3fe7132815d4b09a6bd0a9b5de0bfaf69e6ea1a3ff80d3) | condition met |
+| payout | [0xab8670d8...50a4aa130](https://testnet.arcscan.app/tx/0xab8670d8a8246bfc734173ebcf6f3dd0a45859de12e14b04432070450a4aa130) | 0.1 USDC to the recipient on Arc |
+
+Settled in 9.0 seconds. Both failure paths are proven onchain too, each reverting with status 0:
+
+| Failure | Tx | Why it refused |
+| --- | --- | --- |
+| threshold unmet | [0x8b219f28...3b7f707b](https://testnet.arcscan.app/tx/0x8b219f28d552f2fba5efa276ec0f8d9f5528a417488304474784c61a3b7f707b) | a "release only if USDC/USD <= 0.99" depeg policy, held unmet by a healthy live price |
+| stale price | [0x624f6928...86e37aea7](https://testnet.arcscan.app/tx/0x624f6928348ec453333aa919c598f76d62ffe77f78d324a0989351586e37aea7) | maxStaleSeconds exceeded, the fail-closed staleness guard |
+
+The negative policies are deliberately unfunded: release checks the condition before the funding check, so both revert with `ConditionNotMet`, which shows the condition gates release rather than the balance.
+
+One current limitation, stated plainly: v1 checks the price against the threshold through the official Pyth adapter; confidence-interval rejection is designed and lands with the generic adapter, which the `AggregatorV3Interface` surface does not expose. See docs/specs for that design.
 
 ## Failure paths
 

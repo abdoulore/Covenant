@@ -25,7 +25,7 @@ flowchart TB
     C --> PB[mint direct to recipient on Base Sepolia]
 ```
 
-- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Chainlink price feed crossing a threshold. Release reverts if the condition is not met.
+- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Pyth price feed crossing a threshold. Release reverts if the condition is not met.
 - **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written before any funds move, so a restart never pays twice.
 - **Wallets** are Circle developer-controlled wallets for the treasury, executor, and recipient roles, behind one interface so a later move to user-controlled wallets touches no settlement logic.
 
@@ -56,6 +56,7 @@ Everything is proven on live testnet. Full transaction hashes and explorer links
 | FX settlement on Arc, release to paid | 16.6 seconds |
 | Cross-chain settlement, Arc to Base Sepolia | 28.8 seconds |
 | Attestation settlement, signed release to paid | 6.8 seconds |
+| Oracle settlement, depeg-protection release to paid | 9.0 seconds |
 | PolicyVault deployment cost | 0.0592 USDC |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
@@ -95,4 +96,4 @@ Fund the treasury and executor wallets from the Circle faucet at faucet.circle.c
 
 Phase 1, the settlement canary, is complete: both payment archetypes settle end to end onchain, the failure path is proven, and the recipient is never short-changed.
 
-Phase 2 has added two condition types. Attestation, where an attester's EIP-712 signature releases a policy, is proven onchain. Oracle, where a Chainlink price feed crossing a threshold releases a policy, is built and tested against a mock feed, with an executor keeper that polls and releases. It is not demoed onchain, because Arc testnet does not publish Chainlink push Data Feed addresses today: Arc is absent from Chainlink's Data Feeds directory, its feeds file for Arc returning 404 on Chainlink's live feeds host while other testnets resolve there, and the live Chainlink oracle surface on Arc is Data Streams, a pull-based model that reads differently from the on-chain feed this condition uses. A live oracle demo waits on either published push feeds or a Data Streams integration. The system runs on testnet only.
+Phase 2 has added two condition types, both proven onchain. Attestation, where an attester's EIP-712 signature releases a policy, settles in 6.8 seconds. Oracle, where a price feed crossing a threshold releases a policy, is demoed as a USDC/USD depeg-protection policy against a live Pyth feed. Arc testnet does not publish Chainlink push Data Feeds, but Pyth is a pull oracle deployed on Arc and reachable with no credentials, and its official PythAggregatorV3 adapter exposes a feed through the same AggregatorV3Interface the condition already reads, so the condition runs against live Pyth data with no change to the vault. v1 checks the price against the threshold through that adapter; confidence-interval rejection is designed and lands with the generic adapter. The system runs on testnet only.
