@@ -20,6 +20,7 @@ function releaseLog(opts: {
   blockNumber: bigint;
   logIndex?: number;
   txHash?: string;
+  periodIndex?: number;
 }) {
   const word = (v: bigint | number) => BigInt(v).toString(16).padStart(64, "0");
   const addr = (a: string) => a.toLowerCase().replace("0x", "").padStart(64, "0");
@@ -32,7 +33,7 @@ function releaseLog(opts: {
     ] as [`0x${string}`, `0x${string}`, `0x${string}`],
     data: `0x${word(opts.amount)}${word(opts.payoutCurrency)}${word(opts.destinationDomain)}${addr(
       "0x556328348c9c71fd77f31d86a2c2c989beb42671",
-    )}` as `0x${string}`,
+    )}${word(opts.periodIndex ?? 0)}` as `0x${string}`,
     blockNumber: opts.blockNumber,
     logIndex: opts.logIndex ?? 0,
     transactionHash: (opts.txHash ?? "0xabc") as `0x${string}`,
@@ -128,6 +129,7 @@ describe("EventWatcher", () => {
       destinationDomain: 26,
       blockNumber: 105n,
       txHash: "0xdeadbeef",
+      periodIndex: 2,
     });
     const { client } = fakeClient(120n, [log]);
     const seen: ReleasedPolicy[] = [];
@@ -139,6 +141,7 @@ describe("EventWatcher", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
       policyId: "7",
+      periodIndex: 2,
       amount: "1000000",
       payoutCurrency: "EURC",
       destinationDomain: 26,

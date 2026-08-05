@@ -20,6 +20,7 @@
     "canary": "npm exec --workspace executor -- tsx --env-file=../.env scripts/canary.ts",
     "demo:attestation": "npm exec --workspace executor -- tsx --env-file=../.env scripts/attestation-demo.ts",
     "demo:oracle": "npm exec --workspace executor -- tsx --env-file=../.env scripts/pyth-oracle-demo.ts",
+    "demo:scheduling": "npm exec --workspace executor -- tsx --env-file=../.env scripts/scheduling-demo.ts",
     "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts"
   },
   "engines": {

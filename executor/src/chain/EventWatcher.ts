@@ -18,12 +18,12 @@ import { chainFor } from "../config.js";
 import type { PayoutCurrency, ReleasedPolicy } from "../types.js";
 
 export const POLICY_RELEASED_ABI = parseAbi([
-  "event PolicyReleased(uint256 indexed policyId, address indexed recipient, uint256 amount, uint8 payoutCurrency, uint32 destinationDomain, address executor)",
+  "event PolicyReleased(uint256 indexed policyId, address indexed recipient, uint256 amount, uint8 payoutCurrency, uint32 destinationDomain, address executor, uint256 periodIndex)",
 ]);
 
 /** keccak of the event signature. Precomputed so a scan does not recompute it per poll. */
 export const POLICY_RELEASED_TOPIC =
-  "0x462d3ae2ab13c633cacd14662ba357e3309e06043c193d8632960dc0e1336820" as const;
+  "0x97fc1c5f4253ada03006e90ee82795a83a117f3e486cb905ee56667653862086" as const;
 
 /** Mirrors PolicyVault.PayoutCurrency. Index is the onchain enum value. */
 const PAYOUT_CURRENCIES: PayoutCurrency[] = ["USDC", "EURC"];
@@ -146,6 +146,7 @@ export class EventWatcher {
 
     return {
       policyId: args.policyId.toString(),
+      periodIndex: Number(args.periodIndex),
       recipient: args.recipient,
       amount: args.amount.toString(),
       payoutCurrency: currency,

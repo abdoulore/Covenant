@@ -3,7 +3,7 @@
 Onchain proof for every claim this project makes. Each entry carries a transaction hash and an explorer link. Nothing is listed that has not actually executed.
 
 Network: Arc Testnet (chain id 5042002) and Base Sepolia (84532). Testnet only.
-Run date: 2026-07-27. Every proof below is on one contract, PolicyVault v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1).
+Run dates: 2026-07-27 (v2) and 2026-08-05 (v3). The four condition types and the Pyth oracle are proven on PolicyVault v2 at [`0xB702...09D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Recurring and sweep scheduling are proven on its successor v3 at [`0xDC00...7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300). Two deployments, because the vault is immutable and scheduling changed it; nothing migrates and v2 keeps working.
 
 ---
 
@@ -111,6 +111,29 @@ Settled in 9.0 seconds. Both failure paths are proven onchain too, each revertin
 The negative policies are deliberately unfunded: release checks the condition before the funding check, so both revert with `ConditionNotMet`, which shows the condition gates release rather than the balance.
 
 One current limitation, stated plainly: v1 checks the price against the threshold through the official Pyth adapter; confidence-interval rejection is designed and lands with the generic adapter, which the `AggregatorV3Interface` surface does not expose. See docs/specs for that design.
+
+## Scheduling
+
+PolicyVault v3 adds recurring policies: payroll, a fixed slice each interval, and sweep, the balance above a buffer. They release period by period through `releasePeriod`, and each period is a separate `PolicyReleased` that settles on its own.
+
+Payroll, policy 2 on v3: 0.01 USDC every 4 seconds, three periods, then it retires.
+
+| Period | Release | Payout |
+| --- | --- | --- |
+| 1 | [0xab3ca192...77d1b92](https://testnet.arcscan.app/tx/0xab3ca192218daa03580edfc56f82382eef7218e7433a84dda03d39fc377d1b92) | [0x0999a9e4...188ff9de](https://testnet.arcscan.app/tx/0x0999a9e408b163aec2619da681962923e95226d572c570f9b43a39a6188ff9de) |
+| 2 | [0x9d879832...448f5265](https://testnet.arcscan.app/tx/0x9d87983254cb3433db6eebdd969d4ede15e1b70a519ae5332206c39b448f5265) | [0x22feb1de...70f176f0](https://testnet.arcscan.app/tx/0x22feb1dedbc70ab8c4965f3172957f0076100edabcbc385d14a17ebd70f176f0) |
+| 3 | [0x0a0a625b...f874099e](https://testnet.arcscan.app/tx/0x0a0a625b64727604356386b80dfe5b715a2a01c19fef20858a3082bbf874099e) | [0xdc97a869...597f9650](https://testnet.arcscan.app/tx/0xdc97a869aabc7e6fd2c27d91d5cca798f6f143f359e7204613a497c6597f9650) |
+
+Created in [0x7fedbc8b...4e5d9f9f](https://testnet.arcscan.app/tx/0x7fedbc8b6ca9cd50909bf65d94da391615ec5cb20b0294e388017cce4e5d9f9f). Each period is settled independently, keyed by policy id and period index, so the second and third periods are not mistaken for an already-settled first. Status after the third period: Executed.
+
+Catch-up is bounded and safe. A period overdue beyond the policy's `maxCatchUp` is not paid automatically. On policy 3, the keeper's `releasePeriod` on the overdue period reverts, and only the owner can clear it:
+
+| Step | Tx | Why |
+| --- | --- | --- |
+| keeper attempt | [0xc0468665...43c67d817](https://testnet.arcscan.app/tx/0xc046866520b8a026ed6105b18cec72f806229546ee61f3280c094bd43c67d817) | period overdue beyond maxCatchUp, `releasePeriod` reverts CatchUpStale |
+| owner approval | [0x74aa639d...83a75e76](https://testnet.arcscan.app/tx/0x74aa639d7174a8de1e8061eef36665e5a7dc287711d62f80b255c3bb83a75e76) | `approveStalePeriod` releases exactly the held period |
+
+This is the treasury-safe default: a schedule forgotten for two months does not auto-pay the day someone finally runs the keeper. The overdue period holds, and the owner decides.
 
 ## Failure paths
 

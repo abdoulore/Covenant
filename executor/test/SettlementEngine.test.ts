@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettlementEngine, type LegRunner } from "../src/SettlementEngine.js";
-import { SettlementStore } from "../src/store/SettlementStore.js";
+import { SettlementStore, settlementKey } from "../src/store/SettlementStore.js";
 import { toDecimalString } from "../src/legs/legs.js";
 import { ARC_DOMAIN, BASE_SEPOLIA_DOMAIN } from "../src/config.js";
 import type { LegKind, ReleasedPolicy } from "../src/types.js";
@@ -26,6 +26,7 @@ const wallets: WalletProvider = {
 function release(over: Partial<ReleasedPolicy> = {}): ReleasedPolicy {
   return {
     policyId: "1",
+    periodIndex: 0,
     recipient: "0xrecipient",
     amount: "1000000",
     payoutCurrency: "USDC",
@@ -121,7 +122,7 @@ describe("SettlementEngine", () => {
 
     expect(ran).toEqual([]);
     // No half-created record left behind for an impossible policy.
-    expect(await store.get("1")).toBeUndefined();
+    expect(await store.get(settlementKey("1", 0))).toBeUndefined();
   });
 
   it("never processes the same policy twice", async () => {
@@ -214,20 +215,21 @@ describe("SettlementEngine", () => {
   it("resumes an interrupted settlement without repeating completed legs", async () => {
     const path = await tmpFile();
     const policy = release({ destinationDomain: BASE_SEPOLIA_DOMAIN });
+    const key = settlementKey(policy.policyId, policy.periodIndex);
 
     // Build the exact state a crash leaves behind: claimed, bridge done, payout still pending,
     // settlement still in_progress. Written through the store's own API so the test cannot drift
     // from how the engine actually persists things.
     const crashed = new SettlementStore(path);
     expect(await crashed.tryClaim(policy, ["bridge", "payout"], "https://x/release")).toBe(true);
-    await crashed.updateLeg(policy.policyId, "bridge", {
+    await crashed.updateLeg(key, "bridge", {
       status: "succeeded",
       txHash: "0xbridge",
       explorerUrl: "https://x/bridge",
       attempts: 1,
       completedAt: new Date().toISOString(),
     });
-    expect((await crashed.get(policy.policyId))?.status).toBe("in_progress");
+    expect((await crashed.get(key))?.status).toBe("in_progress");
 
     // A new process starts against the same file and resumes.
     const store = new SettlementStore(path);
@@ -237,7 +239,7 @@ describe("SettlementEngine", () => {
     expect(count).toBe(1);
     expect(resumed.ran).toEqual(["payout"]);
 
-    const record = await store.get(policy.policyId);
+    const record = await store.get(key);
     expect(record?.status).toBe("settled");
     // The already-completed bridge leg keeps its original hash and is not re-run.
     expect(record?.legs.find((l) => l.kind === "bridge")?.txHash).toBe("0xbridge");
@@ -289,10 +291,11 @@ describe("SettlementEngine", () => {
   it("resumes with the converted amount rather than the original", async () => {
     const path = await tmpFile();
     const policy = release({ payoutCurrency: "EURC", amount: "500000" });
+    const key = settlementKey(policy.policyId, policy.periodIndex);
 
     const crashed = new SettlementStore(path);
     await crashed.tryClaim(policy, ["fx", "payout"], "https://x/release");
-    await crashed.updateLeg(policy.policyId, "fx", {
+    await crashed.updateLeg(key, "fx", {
       status: "succeeded",
       txHash: "0xfx",
       outputAmount: "373862",
@@ -347,7 +350,7 @@ describe("SettlementEngine", () => {
     const record = await engineWith(store, runLeg).settle(release());
 
     expect(record?.status).toBe("settled");
-    const reloaded = await new SettlementStore((store as unknown as { filePath: string }).filePath).get("1");
+    const reloaded = await new SettlementStore((store as unknown as { filePath: string }).filePath).get(settlementKey("1", 0));
     expect(reloaded?.legs[0]?.resumeState).toEqual({ blockNumber: "123", nested: { fee: "456" } });
   });
 

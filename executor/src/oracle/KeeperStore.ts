@@ -86,6 +86,19 @@ export class KeeperStore {
     return data.oracleIds.map(BigInt);
   }
 
+  /**
+   * Generic aliases. The tracked-id set serves any keeper that owns this store file, not only the
+   * oracle keeper. The scheduler keeper tracks recurring policies through the same mechanism, in its
+   * own store file.
+   */
+  async track(policyId: bigint): Promise<void> {
+    return this.addOraclePolicy(policyId);
+  }
+
+  async tracked(): Promise<bigint[]> {
+    return this.listOraclePolicies();
+  }
+
   async isHandled(policyId: bigint): Promise<boolean> {
     const data = await this.load();
     return data.handled.includes(policyId.toString());

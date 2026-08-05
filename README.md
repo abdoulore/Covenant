@@ -25,7 +25,7 @@ flowchart TB
     C --> PB[mint direct to recipient on Base Sepolia]
 ```
 
-- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Pyth price feed crossing a threshold. Release reverts if the condition is not met.
+- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Pyth price feed crossing a threshold. It also supports recurring policies, payroll and sweep, that release on a schedule. Release reverts if the condition is not met.
 - **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written before any funds move, so a restart never pays twice.
 - **Wallets** are Circle developer-controlled wallets for the treasury, executor, and recipient roles, behind one interface so a later move to user-controlled wallets touches no settlement logic.
 
@@ -57,12 +57,13 @@ Everything is proven on live testnet. Full transaction hashes and explorer links
 | Cross-chain settlement, Arc to Base Sepolia | 28.8 seconds |
 | Attestation settlement, signed release to paid | 6.8 seconds |
 | Oracle settlement, depeg-protection release to paid | 9.0 seconds |
+| Recurring payroll, periods each settled independently | proven on v3 |
 | PolicyVault deployment cost | 0.0592 USDC |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 182, across contract and executor |
+| Automated tests | 208, across contract and executor |
 
-Deployed PolicyVault: [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) on Arc Testnet (chain id 5042002). Every proof in [docs/RESULTS.md](docs/RESULTS.md) is on this one contract.
+Deployed PolicyVault: [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) on Arc Testnet (chain id 5042002), carrying the four condition types and the Pyth oracle. Recurring and sweep scheduling are on the successor v3, [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300), a new deployment because the vault is immutable. Full hashes and links are in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## Repository layout
 
@@ -81,7 +82,7 @@ Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.exampl
 ```bash
 git submodule update --init # OpenZeppelin, required before the contracts will build
 npm install                 # install executor dependencies
-npm test                    # 182 tests: Foundry contract suite and executor suite
+npm test                    # 208 tests: Foundry contract suite and executor suite
 
 npm run wallets:write       # create the Circle developer-controlled wallets
 npm run deploy              # deploy PolicyVault to Arc testnet
@@ -96,4 +97,4 @@ Fund the treasury and executor wallets from the Circle faucet at faucet.circle.c
 
 Phase 1, the settlement canary, is complete: both payment archetypes settle end to end onchain, the failure path is proven, and the recipient is never short-changed.
 
-Phase 2 has added two condition types, both proven onchain. Attestation, where an attester's EIP-712 signature releases a policy, settles in 6.8 seconds. Oracle, where a price feed crossing a threshold releases a policy, is demoed as a USDC/USD depeg-protection policy against a live Pyth feed. Arc testnet does not publish Chainlink push Data Feeds, but Pyth is a pull oracle deployed on Arc and reachable with no credentials, and its official PythAggregatorV3 adapter exposes a feed through the same AggregatorV3Interface the condition already reads, so the condition runs against live Pyth data with no change to the vault. v1 checks the price against the threshold through that adapter; confidence-interval rejection is designed and lands with the generic adapter. The system runs on testnet only.
+Phase 2 has added two condition types, both proven onchain. Attestation, where an attester's EIP-712 signature releases a policy, settles in 6.8 seconds. Oracle, where a price feed crossing a threshold releases a policy, is demoed as a USDC/USD depeg-protection policy against a live Pyth feed. Arc testnet does not publish Chainlink push Data Feeds, but Pyth is a pull oracle deployed on Arc and reachable with no credentials, and its official PythAggregatorV3 adapter exposes a feed through the same AggregatorV3Interface the condition already reads, so the condition runs against live Pyth data with no change to the vault. v1 checks the price against the threshold through that adapter; confidence-interval rejection is designed and lands with the generic adapter. Scheduling is added on PolicyVault v3: recurring payroll and sweep policies release period by period, each period settled independently, with a maxCatchUp bound that holds a long-overdue period for owner approval rather than auto-paying it. Proven onchain. The system runs on testnet only.

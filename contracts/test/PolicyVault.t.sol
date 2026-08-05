@@ -119,7 +119,7 @@ contract PolicyVaultTest is Test {
 
         vm.expectEmit(true, true, false, true, address(vault));
         emit PolicyVault.PolicyReleased(
-            id, recipient, 10 * ONE_USDC, PolicyVault.PayoutCurrency.USDC, BASE_SEPOLIA_DOMAIN, executor
+            id, recipient, 10 * ONE_USDC, PolicyVault.PayoutCurrency.USDC, BASE_SEPOLIA_DOMAIN, executor, 0
         );
         vault.release(id);
 

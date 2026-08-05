@@ -12,7 +12,7 @@
  */
 
 import { chainFor, planLegs } from "./config.js";
-import type { SettlementStore } from "./store/SettlementStore.js";
+import { settlementKey, type SettlementStore } from "./store/SettlementStore.js";
 import type { LegKind, ReleasedPolicy, SettlementRecord } from "./types.js";
 import type { WalletProvider } from "./wallet/WalletProvider.js";
 import type { LegResult } from "./legs/legs.js";
@@ -68,6 +68,7 @@ export class SettlementEngine {
     // planLegs also validates the route, so an impossible combination fails before the claim and
     // does not leave an in_progress record behind.
     const legs = planLegs(policy.payoutCurrency, policy.destinationDomain);
+    const key = settlementKey(policy.policyId, policy.periodIndex);
 
     const claimed = await this.store.tryClaim(
       policy,
@@ -88,12 +89,12 @@ export class SettlementEngine {
     let amount = policy.amount;
     for (const kind of legs) {
       const result = await this.runLegWithRetries(kind, policy, amount);
-      if (!result) return this.store.get(policy.policyId);
+      if (!result) return this.store.get(key);
       if (result.outputAmount) amount = result.outputAmount;
     }
 
-    await this.store.markSettled(policy.policyId);
-    const record = await this.store.get(policy.policyId);
+    await this.store.markSettled(key);
+    const record = await this.store.get(key);
     this.log(`policy ${policy.policyId}: settled in ${record?.durationMs}ms`);
     return record;
   }
@@ -102,6 +103,7 @@ export class SettlementEngine {
   async resumeInterrupted(): Promise<number> {
     const stuck = await this.store.inProgress();
     for (const record of stuck) {
+      const key = settlementKey(record.policyId, record.periodIndex);
       this.log(`policy ${record.policyId}: resuming, interrupted after ${completedLegs(record)}`);
       const remaining = record.legs.filter((l) => l.status !== "succeeded").map((l) => l.kind);
 
@@ -123,7 +125,7 @@ export class SettlementEngine {
         }
         if (result.outputAmount) amount = result.outputAmount;
       }
-      if (!failed) await this.store.markSettled(record.policyId);
+      if (!failed) await this.store.markSettled(key);
     }
     return stuck.length;
   }
@@ -133,19 +135,20 @@ export class SettlementEngine {
     policy: ReleasedPolicy,
     amountBaseUnits: string,
   ): Promise<LegResult | undefined> {
+    const key = settlementKey(policy.policyId, policy.periodIndex);
     const startedAt = new Date().toISOString();
-    await this.store.updateLeg(policy.policyId, kind, { startedAt });
+    await this.store.updateLeg(key, kind, { startedAt });
 
     let lastError = "";
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
-      await this.store.updateLeg(policy.policyId, kind, { attempts: attempt });
+      await this.store.updateLeg(key, kind, { attempts: attempt });
       let result: LegResult;
       try {
         result = await this.runLeg(kind, policy, this.wallets, amountBaseUnits);
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
         this.log(`policy ${policy.policyId}: ${kind} attempt ${attempt}/${this.maxAttempts} failed: ${lastError}`);
-        await this.store.updateLeg(policy.policyId, kind, { error: lastError });
+        await this.store.updateLeg(key, kind, { error: lastError });
         if (attempt < this.maxAttempts) await delay(this.retryDelayMs);
         continue;
       }
@@ -159,7 +162,7 @@ export class SettlementEngine {
        * paid twice. If the write fails, stop the settlement and demand a human.
        */
       try {
-        await this.store.updateLeg(policy.policyId, kind, {
+        await this.store.updateLeg(key, kind, {
           status: "succeeded",
           txHash: result.txHash,
           explorerUrl: result.explorerUrl,
@@ -187,7 +190,7 @@ export class SettlementEngine {
           `written: ${detail}. Refusing to retry, because retrying would repeat a completed ` +
           `transfer. Reconcile this policy by hand against the transaction above.`;
         this.log(`policy ${policy.policyId}: ${message}`);
-        await this.store.markFailed(policy.policyId, kind, message).catch(() => {});
+        await this.store.markFailed(key, kind, message).catch(() => {});
         throw new Error(message);
       }
 
@@ -195,7 +198,7 @@ export class SettlementEngine {
       return result;
     }
 
-    await this.store.markFailed(policy.policyId, kind, lastError);
+    await this.store.markFailed(key, kind, lastError);
     this.log(
       `policy ${policy.policyId}: FAILED at ${kind}. Funds are in the executor wallet. ` +
         `Manual recovery required; the store will not retry this automatically.`,
@@ -217,6 +220,7 @@ function completedLegs(record: SettlementRecord): string {
 function policyFrom(record: SettlementRecord): ReleasedPolicy {
   return {
     policyId: record.policyId,
+    periodIndex: record.periodIndex,
     recipient: record.recipient,
     amount: record.amount,
     payoutCurrency: record.payoutCurrency,

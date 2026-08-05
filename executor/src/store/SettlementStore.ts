@@ -38,6 +38,15 @@ function bigintSafe(_key: string, value: unknown): unknown {
 
 const EMPTY: StoreShape = { version: 1, settlements: {} };
 
+/**
+ * The store key for a settlement: one per release, so each period of a recurring policy settles
+ * independently. Single-shot releases use period 0. Keying on policyId alone would make a recurring
+ * policy's second period look already-claimed and never pay it.
+ */
+export function settlementKey(policyId: string, periodIndex: number): string {
+  return `${policyId}:${periodIndex}`;
+}
+
 export class SettlementStore {
   private data: StoreShape = structuredClone(EMPTY);
   private loaded = false;
@@ -72,10 +81,12 @@ export class SettlementStore {
    */
   async tryClaim(policy: ReleasedPolicy, legs: LegKind[], releaseExplorerUrl: string): Promise<boolean> {
     await this.load();
-    if (this.data.settlements[policy.policyId]) return false;
+    const key = settlementKey(policy.policyId, policy.periodIndex);
+    if (this.data.settlements[key]) return false;
 
     const record: SettlementRecord = {
       policyId: policy.policyId,
+      periodIndex: policy.periodIndex,
       status: "in_progress",
       recipient: policy.recipient,
       amount: policy.amount,
@@ -87,7 +98,7 @@ export class SettlementStore {
       startedAt: new Date().toISOString(),
     };
 
-    this.data.settlements[policy.policyId] = record;
+    this.data.settlements[key] = record;
     await this.persist();
     return true;
   }

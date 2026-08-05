@@ -14,6 +14,8 @@ export type ConditionType = "Timelock" | "Approval";
 /** A PolicyReleased event, decoded. This is the executor's input. */
 export interface ReleasedPolicy {
   policyId: string;
+  /** 0 for a single-shot release, 1, 2, 3... for each period of a recurring policy. */
+  periodIndex: number;
   recipient: string;
   /** Base units, 6 decimals. */
   amount: string;
@@ -82,6 +84,8 @@ export type SettlementStatus = "in_progress" | "settled" | "failed";
 
 export interface SettlementRecord {
   policyId: string;
+  /** The period this settlement is for. 0 for single-shot. Part of the store key. */
+  periodIndex: number;
   status: SettlementStatus;
   recipient: string;
   amount: string;
