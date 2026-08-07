@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Covenant monitor</title>
+<style>
+  :root {
+    --bg: #0a0b0d; --panel: #101216; --panel2: #15181d; --line: #23272f;
+    --text: #e7e9ec; --muted: #949aa4; --dim: #626977;
+    --good: #46b968; --hold: #d3a03e; --bad: #e0655f; --live: #4bb3a4;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  a { color: var(--live); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 28px 22px 64px; }
+  .mono { font-family: var(--mono); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .brand { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+  .brand .accent { color: var(--live); }
+  .tagline { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .meta { text-align: right; font-size: 12px; color: var(--dim); }
+  .meta .vault { display: block; }
+
+  .grid-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin: 34px 0 12px; }
+  section:first-of-type .grid-label { margin-top: 26px; }
+
+  /* depeg hero */
+  .depeg { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; }
+  .depeg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .depeg-price { font-family: var(--mono); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+  .depeg-pair { color: var(--muted); font-size: 13px; }
+  .verdict { font-size: 13px; font-weight: 600; padding: 4px 11px; border-radius: 999px; }
+  .verdict.ok { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+  .verdict.warn { color: var(--bad); background: color-mix(in srgb, var(--bad) 15%, transparent); }
+  .gauge { position: relative; height: 46px; margin: 26px 0 8px; }
+  .gauge .track { position: absolute; top: 22px; left: 0; right: 0; height: 4px; border-radius: 2px; background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 55%, var(--panel2)) 0%, var(--panel2) 42%, var(--panel2) 100%); }
+  .gauge .tick { position: absolute; top: 12px; width: 1px; height: 24px; background: var(--line); }
+  .gauge .tick.thr { background: var(--hold); }
+  .gauge .tick.trg { background: var(--bad); }
+  .gauge .tick .lab { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; color: var(--dim); font-family: var(--mono); }
+  .gauge .conf { position: absolute; top: 19px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--live) 22%, transparent); }
+  .gauge .marker { position: absolute; top: 15px; width: 11px; height: 18px; border-radius: 3px; transform: translateX(-50%); border: 2px solid var(--bg); }
+  .depeg-readouts { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .ro .k { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  .ro .v { font-family: var(--mono); font-size: 15px; margin-top: 2px; }
+
+  /* policy table */
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); font-weight: 500; padding: 0 12px 9px; border-bottom: 1px solid var(--line); }
+  thead th.r, tbody td.r { text-align: right; }
+  tbody td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:hover { background: var(--panel); }
+  .vbadge { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+  .ptype { font-weight: 600; }
+  .pdetail { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .pdetail .mono { color: var(--dim); }
+  .pill { font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.Executed, .pill.settled { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+  .pill.Releasable { color: var(--hold); background: color-mix(in srgb, var(--hold) 14%, transparent); }
+  .pill.Pending { color: var(--muted); background: var(--panel2); }
+  .pill.Cancelled, .pill.failed { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+
+  /* settlement receipts */
+  .receipts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 720px) { .receipts { grid-template-columns: 1fr; } .depeg-price { font-size: 34px; } }
+  .receipt { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .receipt-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .receipt-head .who { font-weight: 600; font-size: 13px; }
+  .receipt-head .amt { font-family: var(--mono); color: var(--muted); font-size: 12.5px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+  .stop .k { font-size: 10.5px; color: var(--dim); letter-spacing: 0.04em; }
+  .stop .h { font-family: var(--mono); font-size: 12.5px; margin-top: 2px; }
+  .stop.r { text-align: right; }
+  .held { text-align: center; }
+  .held .arrow { color: var(--line); font-size: 15px; line-height: 1; }
+  .held .n { font-family: var(--mono); font-size: 12px; color: var(--live); margin-top: 3px; white-space: nowrap; }
+  .held .cap { font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .state-msg { color: var(--muted); padding: 40px 0; text-align: center; }
+  .skeleton { height: 14px; border-radius: 4px; background: linear-gradient(90deg, var(--panel) 0%, var(--panel2) 50%, var(--panel) 100%); background-size: 200% 100%; animation: sh 1.3s infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand"><span class="accent">Covenant</span> monitor</div>
+      <div class="tagline">Programmable treasury settlement on Arc. Read only: this view holds no keys and moves nothing.</div>
+    </div>
+    <div class="meta" id="meta"><span class="skeleton" style="display:inline-block;width:180px"></span></div>
+  </header>
+
+  <section>
+    <div class="grid-label">Depeg protection, live</div>
+    <div id="depeg"><div class="depeg"><div class="skeleton" style="width:60%;height:40px"></div></div></div>
+  </section>
+
+  <section>
+    <div class="grid-label">Policies</div>
+    <div id="policies"><div class="state-msg">Reading policies from chain...</div></div>
+  </section>
+
+  <section>
+    <div class="grid-label">Settlement receipts, custody measured per transaction</div>
+    <div id="settlements" class="receipts"></div>
+  </section>
+
+  <footer>
+    <span>Every hash links to the Arc or Base Sepolia explorer. Testnet only.</span>
+    <span id="foot" class="dim"></span>
+  </footer>
+</div>
+
+<script>
+const EXPLORER = { arc: "https://testnet.arcscan.app/tx/", base: "https://sepolia.basescan.org/tx/" };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const short = (h) => h ? h.slice(0, 6) + "…" + h.slice(-4) : "";
+const addr = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
+const usdc = (base) => base == null ? "" : (Number(base) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 }) + " USDC";
+const txLink = (url, hash) => url ? `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${esc(short(hash))}</a>` : `<span class="mono dim">${esc(short(hash))}</span>`;
+function agoUnix(sec) { const s = Math.max(0, Math.floor(Date.now() / 1000 - sec)); return s < 90 ? s + "s ago" : Math.floor(s / 60) + "m ago"; }
+function agoIso(iso) { if (!iso) return ""; const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000)); return s < 90 ? s + "s ago" : Math.floor(s / 60) + "m ago"; }
+function relUnix(sec) {
+  const s = Math.round(Number(sec) - Date.now() / 1000), a = Math.abs(s);
+  const t = a < 90 ? a + "s" : a < 5400 ? Math.round(a / 60) + "m" : a < 172800 ? Math.round(a / 3600) + "h" : Math.round(a / 86400) + "d";
+  return s >= 0 ? "in " + t : t + " ago";
+}
+function fundedCell(p) {
+  if (p.recurring) {
+    return p.effectiveStatus === "Executed"
+      ? `<span class="dim">fully disbursed</span>`
+      : `${esc(usdc(p.funded))}<div class="dim" style="font-size:11px">remaining</div>`;
+  }
+  return `${esc(usdc(p.funded))}${(p.amount && p.amount !== "0") ? `<div class="dim" style="font-size:11px">of ${esc(usdc(p.amount))}</div>` : ``}`;
+}
+
+function depegPanel(o) {
+  if (!o) return `<div class="depeg"><span class="muted">Pyth price unavailable right now.</span></div>`;
+  const pegFloor = 0.995, depegTrig = 0.99, lo = 0.98, hi = 1.005, span = hi - lo;
+  const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / span) * 100));
+  const met = o.price >= pegFloor;
+  const confW = Math.min(30, (o.conf / span) * 100);
+  return `
+  <div class="depeg">
+    <div class="depeg-head">
+      <div>
+        <div class="depeg-price">${o.price.toFixed(6)}</div>
+        <div class="depeg-pair">${esc(o.pair)} via Pyth, pull oracle</div>
+      </div>
+      <div class="verdict ${met ? "ok" : "warn"}">${met ? "Holding peg, releasable" : "Below peg floor, held"}</div>
+    </div>
+    <div class="gauge">
+      <div class="track"></div>
+      <div class="tick trg" style="left:${pos(depegTrig)}%"><span class="lab">0.990 trigger</span></div>
+      <div class="tick thr" style="left:${pos(pegFloor)}%"><span class="lab">0.995 floor</span></div>
+      <div class="conf" style="left:${pos(o.price) - confW / 2}%;width:${confW}%"></div>
+      <div class="marker" style="left:${pos(o.price)}%;background:${met ? "var(--good)" : "var(--bad)"}"></div>
+    </div>
+    <div class="depeg-readouts">
+      <div class="ro"><div class="k">CONFIDENCE</div><div class="v">&plusmn;${o.conf.toFixed(6)}</div></div>
+      <div class="ro"><div class="k">RELEASE RULE</div><div class="v">price &ge; 0.995</div></div>
+      <div class="ro"><div class="k">STATE</div><div class="v" style="color:${met ? "var(--good)" : "var(--bad)"}">${met ? "condition met" : "condition unmet"}</div></div>
+      <div class="ro"><div class="k">UPDATED</div><div class="v">${agoUnix(o.publishTime)}</div></div>
+    </div>
+  </div>`;
+}
+
+function policyDetail(p) {
+  const t = p.conditionType;
+  if (t === "Timelock") return `releases <span class="num" title="unix ${esc(p.releaseTime)}">${relUnix(p.releaseTime)}</span>`;
+  if (t === "Approval") return `<span class="num">${p.approvalCount}</span> of <span class="num">${p.threshold}</span> approvals`;
+  if (t === "Attestation") return `attester <span class="mono">${esc(addr(p.attester))}</span>, ${p.attested ? "signed" : "awaiting signature"}`;
+  if (t === "Oracle") return `USDC/USD ${p.comparator === "Lte" ? "&le;" : "&ge;"} <span class="num">${esc((Number(p.oracleThreshold)/1e8).toFixed(3))}</span> via <span class="mono">${esc(addr(p.feed))}</span>`;
+  if (t === "Recurring") return `<span class="num">${usdc(p.amountPerPeriod)}</span> every <span class="num">${esc(p.interval)}</span>s, <span class="num">${p.periodsReleased}</span>${Number(p.periods) ? " of " + p.periods : ""} released, next due <span class="num" title="unix ${esc(p.nextDue)}">${relUnix(p.nextDue)}</span>`;
+  if (t === "Sweep") return `sweep above <span class="num">${usdc(p.buffer)}</span> buffer, min <span class="num">${usdc(p.minSweep)}</span>, every <span class="num">${esc(p.interval)}</span>s`;
+  return "";
+}
+
+function policiesTable(rows) {
+  if (!rows.length) return `<div class="state-msg">No policies found on the configured vaults.</div>`;
+  const body = rows.map((p) => `
+    <tr>
+      <td><span class="vbadge">${esc(p.vault)}</span></td>
+      <td class="num">${esc(p.id)}</td>
+      <td><div class="ptype">${esc(p.conditionType)}</div><div class="pdetail">${policyDetail(p)}</div></td>
+      <td><span class="pill ${esc(p.effectiveStatus)}">${esc(p.effectiveStatus)}</span></td>
+      <td class="r num">${fundedCell(p)}</td>
+    </tr>`).join("");
+  return `<table><thead><tr><th>Vault</th><th>#</th><th>Condition</th><th>Status</th><th class="r">Funded</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function receipt(s) {
+  const explorer = s.payout && /basescan/.test(s.payout.url || "") ? EXPLORER.base : EXPLORER.arc;
+  const held = s.custodyGapMs != null ? (s.custodyGapMs / 1000).toFixed(1) + "s" : "n/a";
+  const xchain = s.destinationDomain != null && Number(s.destinationDomain) !== 26;
+  const label = "policy " + s.policyId + (s.periodIndex ? ", period " + s.periodIndex : "");
+  return `
+  <div class="receipt">
+    <div class="receipt-head">
+      <span class="who">${esc(s.source)} <span class="dim">/ ${esc(label)}</span></span>
+      <span class="amt">${esc(usdc(s.amount))} <span class="pill ${esc(s.status)}" style="margin-left:6px">${esc(s.status)}</span></span>
+    </div>
+    <div class="flow">
+      <div class="stop"><div class="k">FUNDS LEFT VAULT</div><div class="h">${txLink(s.release.url, s.release.txHash)}</div></div>
+      <div class="held"><div class="arrow">&rarr;</div><div class="n">held ${esc(held)}</div><div class="cap">${xchain ? "cross-chain, incl. bridge" : "custody gap"}</div></div>
+      <div class="stop r"><div class="k">RECIPIENT PAID</div><div class="h">${s.payout ? txLink(s.payout.url, s.payout.txHash) : '<span class="dim">not settled</span>'}</div></div>
+    </div>
+  </div>`;
+}
+
+async function refresh() {
+  try {
+    const d = await (await fetch("/api/state")).json();
+    document.getElementById("meta").innerHTML = d.vaults.map((v) => `<span class="vault mono">${esc(v.label)} ${esc(addr(v.address))}</span>`).join("") + `<span class="vault">updated ${esc(agoIso(d.generatedAt))}</span>`;
+    document.getElementById("depeg").innerHTML = depegPanel(d.oracle);
+    document.getElementById("policies").innerHTML = policiesTable(d.policies);
+    document.getElementById("settlements").innerHTML = d.settlements.length
+      ? d.settlements.slice().reverse().map(receipt).join("")
+      : `<div class="state-msg">No settlements recorded yet.</div>`;
+    document.getElementById("foot").textContent = d.policies.length + " policies, " + d.settlements.length + " settlements";
+  } catch (e) {
+    document.getElementById("policies").innerHTML = `<div class="state-msg">Cannot reach the dashboard API. Is <span class="mono">npm run dashboard</span> running?</div>`;
+  }
+}
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
