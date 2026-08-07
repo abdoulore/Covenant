@@ -135,6 +135,22 @@ Catch-up is bounded and safe. A period overdue beyond the policy's `maxCatchUp` 
 
 This is the treasury-safe default: a schedule forgotten for two months does not auto-pay the day someone finally runs the keeper. The overdue period holds, and the owner decides.
 
+## Gateway
+
+A treasury can fund an Arc policy from a unified USDC balance sourced on another chain, with no manual bridge. This is Circle Gateway (Phase 2.2, Integration 1): the vault and its lock are unchanged, Gateway sits upstream on the funding side. Proven end to end at faucet scale.
+
+USDC deposited on Base Sepolia, minted onto Arc, then a policy funded with it and settled to the recipient:
+
+| Step | Tx | Note |
+| --- | --- | --- |
+| deposit (Base Sepolia) | [0x49ab8707...d54e6aad](https://sepolia.basescan.org/tx/0x49ab8707476c5dc1f14be8a8f4f61a4f48a1b553c1bd9ea394596209d54e6aad) | approve + deposit into the unified balance (deposit path) |
+| gateway mint (Arc) | [0xf14ea2fb...00c467a5](https://testnet.arcscan.app/tx/0xf14ea2fbfbb513eda01a6663a3c5963d518c851fdf152cb158c19f0500c467a5) | USDC minted on Arc from the Base Sepolia balance |
+| create + fund | [0xfffc3bac...073b3df3](https://testnet.arcscan.app/tx/0xfffc3bacd7affb64a48d174e82e272ef021064b047faf226419693ce073b3df3) | policy 4 on v3, funded from the Gateway-sourced USDC |
+| release | [0xefe0027e...086a6062](https://testnet.arcscan.app/tx/0xefe0027e8612b63773d2908ee05c0dc4def33e859e53708356e686cf086a6062) | condition met |
+| payout | [0xd03b0564...a2ca276b](https://testnet.arcscan.app/tx/0xd03b0564410ceea2703393132267c9bb1bc36ea1a712accf102edb8ca2ca276b) | recipient paid |
+
+The funding hazard is engineered out, not just warned against: a bare ERC-20 transfer to the GatewayWallet loses the USDC, so its address lives in exactly one file, USDC only ever enters through deposit(), and a test enforces both. The spend delegate is a dedicated key that never doubles as the deployer. See docs/specs and the internal verification record.
+
 ## Failure paths
 
 Two distinct failures are demonstrated, because a payment system that only proves the happy path has proved nothing.
