@@ -14,7 +14,8 @@ The split that makes this safe: the contract decides whether the money moves, an
 
 ```mermaid
 flowchart TB
-    T[Treasury wallet] -->|deposit USDC| V[PolicyVault on Arc]
+    G[USDC on another chain] -->|Circle Gateway, no manual bridge| T[Treasury wallet]
+    T -->|deposit USDC| V["PolicyVault on Arc<br/>timelock, approval, attestation, Pyth oracle, recurring, sweep"]
     V -->|condition NOT met| X[release reverts, status 0]
     V -->|condition met, PolicyReleased| E[Executor service]
 
@@ -22,7 +23,7 @@ flowchart TB
     A -->|EURC on Arc| S[App Kit swap USDC to EURC]
     S --> PA[send EURC to recipient on Arc]
     A -->|USDC cross-chain| C[CCTP v2 burn on Arc]
-    C --> PB[mint direct to recipient on Base Sepolia]
+    C --> PB[mint direct to recipient on Base Sepolia, gasless]
 ```
 
 - **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports four release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, and a Pyth price feed crossing a threshold. It also supports recurring policies, payroll and sweep, that release on a schedule. Release reverts if the condition is not met.
@@ -50,7 +51,7 @@ This is treasury logic that only stays simple when the stablecoin is the native 
 
 ## Proof
 
-Everything is proven on live testnet. Full transaction hashes and explorer links are in [docs/RESULTS.md](docs/RESULTS.md).
+Everything is proven on live testnet. Full transaction hashes and explorer links are in [docs/RESULTS.md](docs/RESULTS.md), and [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) is a ten-minute tour of the two strongest proofs.
 
 | Result | Value |
 | --- | --- |

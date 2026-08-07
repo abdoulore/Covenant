@@ -20,7 +20,7 @@ A payment that releases only when an onchain condition is met, then routes itsel
 | Release on a signed attestation | EIP-712 signature, policy 0, paid to recipient |
 | Recipient needs no gas token | Base Sepolia recipient paid holding 0 ETH |
 | Recipient never short-changed | cross-chain recipient received 0.606602 for a 0.5 policy |
-| No double payment on restart | claim-before-work store, 85 executor tests |
+| No double payment on restart | claim-before-work store, 101 executor tests |
 
 ## The four condition types
 
@@ -29,7 +29,7 @@ A policy releases when its condition is met. PolicyVault enforces all four oncha
 - **Timelock**: releasable after a timestamp. Demonstrated in the failure path below.
 - **Approval**: releasable after N-of-M named approvers call approve. Used by both canary policies.
 - **Attestation**: releasable when a named attester signs an EIP-712 statement. Policy 0 below.
-- **Oracle**: releasable when a Chainlink Data Feed crosses a threshold. Built and tested, not yet demoed onchain (see the Oracle section).
+- **Oracle**: releasable when a price feed crosses a threshold. Proven onchain against a live Pyth feed (see the Oracle section).
 
 ## Deployment
 
@@ -232,13 +232,17 @@ The recipient received more than the policy amount because the allowance exceede
 ```
 git submodule update --init   # OpenZeppelin
 npm install
-npm test                      # 178 tests: Foundry contract suite and executor suite
+npm test                      # 210 tests: Foundry contract suite and executor suite
 
 npm run wallets:write         # create the Circle developer-controlled wallets
 npm run deploy                # deploy PolicyVault to Arc testnet
 npm run canary                # FX and cross-chain archetypes
 npm run demo:attestation      # release on a signed attestation
+npm run demo:oracle           # depeg-protection release on live Pyth data
+npm run demo:scheduling       # recurring payroll and the stale-hold path
+npm run demo:gateway          # fund an Arc policy from USDC on Base Sepolia
 npm run failure-path          # the onchain revert when a condition is unmet
+npm run dashboard             # read-only monitor of policies and settlements
 ```
 
 Requires a filled `.env`, see `.env.example`. Testnet only.
