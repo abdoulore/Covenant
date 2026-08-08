@@ -5,8 +5,10 @@ import { Cards, DepegPanel, PoliciesTable, Receipts } from "./components/Read";
 import { Login } from "./components/Login";
 import { CreatePolicy } from "./components/CreatePolicy";
 import { PolicyDetail } from "./components/PolicyDetail";
+import { Approvals } from "./components/Approvals";
+import { System } from "./components/System";
 
-type Tab = "overview" | "policies" | "settlements";
+type Tab = "overview" | "policies" | "approvals" | "settlements" | "system";
 type Modal = null | "login" | "create";
 
 export function App() {
@@ -44,7 +46,7 @@ export function App() {
       <header className="topbar">
         <div className="brand"><span className="accent">Covenant</span><span className="sub">treasury operator</span></div>
         <nav className="nav">
-          {(["overview", "policies", "settlements"] as Tab[]).map((t) => (
+          {(["overview", "policies", "approvals", "settlements", "system"] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>{t[0]!.toUpperCase() + t.slice(1)}</button>
           ))}
         </nav>
@@ -85,9 +87,18 @@ export function App() {
           </section>
         )}
 
+        {state && tab === "approvals" && (
+          <section>
+            <div className="grid-label">Approvals queue</div>
+            <Approvals policies={state.policies} signedIn={signedIn} onChanged={load} onRequireLogin={() => setModal("login")} />
+          </section>
+        )}
+
         {state && tab === "settlements" && (
           <section><div className="grid-label">Settlement receipts, custody measured per transaction</div><Receipts settlements={state.settlements} /></section>
         )}
+
+        {state && tab === "system" && <System state={state} />}
       </main>
 
       <footer style={{ maxWidth: 1160, margin: "0 auto", padding: "16px 22px 40px", borderTop: "1px solid var(--line)", color: "var(--dim)", fontSize: 12, width: "100%" }}>

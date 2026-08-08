@@ -143,9 +143,15 @@ notices.
 `cd app && npm run build` is clean (typecheck plus Vite). To run locally: `npm run api` (with an
 `OPERATOR_SECRET`), then `cd app && npm run dev`, and open the proxied dev origin.
 
+### Information architecture, complete
+
+All of Part B's sections are built: overview, policies (list, detail, create, fund, approve,
+release), the approvals queue, settlements, and the system page (deployed contracts, the
+key-authority map, and outstanding keeper work derived live from chain rather than a fabricated
+last-run time).
+
 ### Pending (Part B)
 
 - A live per-type e2e for attestation, recurring, and sweep (built and validated; timelock and oracle
   are proven onchain above).
-- The approvals queue and the system page.
-- Deployed screenshots, once hosting is settled (shared with Part A's pending item).
+- Deployment: hosting for the API and the static app (J-B4), then screenshots (shared with Part A).
