@@ -1,6 +1,11 @@
 /** The read views, ported from the monitor to React. Read-only: they render API state only. */
 import type { AppState, Oracle, Policy, Settlement } from "../api";
 import { agoUnix, ARC_DOMAIN, relUnix, shortAddr, shortHash, usdc } from "../lib";
+import { Icon } from "./Icon";
+
+const CONDITION_ICON: Record<string, string> = {
+  Timelock: "clock", Approval: "check", Attestation: "shield", Oracle: "activity", Recurring: "repeat", Sweep: "swap",
+};
 
 export function DepegPanel({ o }: { o: Oracle | null }) {
   if (!o) return <div className="panel muted">Pyth price unavailable right now.</div>;
@@ -77,7 +82,7 @@ export function PoliciesTable({ policies, onSelect }: { policies: Policy[]; onSe
           <tr key={`${p.vault}-${p.id}`} className={onSelect ? "click" : ""} onClick={() => onSelect?.(p)}>
             <td><span className="vbadge">{p.vault}</span></td>
             <td className="num">{p.id}</td>
-            <td><div className="ptype">{p.conditionType}</div><div className="pdetail">{detail(p)}</div></td>
+            <td><div className="ptype"><Icon name={CONDITION_ICON[p.conditionType] ?? "lock"} /> {p.conditionType}</div><div className="pdetail">{detail(p)}</div></td>
             <td><span className={`pill ${p.effectiveStatus}`}>{p.effectiveStatus}</span></td>
             <td className="r num">{usdc(p.funded)}{p.amount && p.amount !== "0" && !p.recurring ? <div className="dim" style={{ fontSize: 11 }}>of {usdc(p.amount)}</div> : null}</td>
           </tr>
@@ -108,7 +113,7 @@ export function Receipts({ settlements }: { settlements: Settlement[] }) {
             </div>
             <div className="flow">
               <div className="stop"><div className="k">FUNDS LEFT VAULT</div><div className="h"><TxLink url={s.release.url} hash={s.release.txHash} /></div></div>
-              <div className="held"><div className="arrow">→</div><div className="n">held {held}</div><div className="cap">{xchain ? "cross-chain, incl. bridge" : "custody gap"}</div></div>
+              <div className="held"><div className="arrow" /><div className="n">held {held}</div><div className="cap">{xchain ? "cross-chain, incl. bridge" : "custody gap"}</div></div>
               <div className="stop r"><div className="k">RECIPIENT PAID</div><div className="h"><TxLink url={s.payout?.url} hash={s.payout?.txHash} /></div></div>
             </div>
           </div>
