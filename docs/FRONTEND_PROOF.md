@@ -86,3 +86,55 @@ reading the file: no keys, tokens, or wallet material.
 
 - Full-page screenshots at laptop and mobile widths, captured once the page is deployed to a real
   host (hosting is an open judgment call). The DOM-level evidence above stands in until then.
+
+---
+
+## Part B: Product app
+
+The operator app (`app/`), a static React SPA that talks only to the Covenant API and holds nothing.
+See docs/DECISIONS.md D12. Verified 2026-08-08, in progress: the read layer, operator auth, and the
+timelock policy lifecycle are proven; the remaining creation types and management surfaces are not
+yet built.
+
+### The write API is gated and validated (Stage 1)
+
+27 automated tests over the API (128 executor tests total): the session token crypto, the boot-safety
+that refuses to start unconfigured in a deployed environment, and the server's auth gating, input
+validation, and idempotency, all with stubs so no chain is touched. Live smoke against the running
+API confirmed the same: `/api/state` serves chain data publicly, a write with no session is 401, a
+wrong operator secret is 401, the right secret issues an HttpOnly cookie, and a valid session with a
+bad body is 400 before any chain call.
+
+### The read layer is the monitor, absorbed
+
+The app renders live state from `/api/state`: policies from both vaults, the live Pyth depeg panel,
+and settlement receipts with the measured custody gap. Same read model the monitor serves, so the two
+cannot drift. Operator login through the Vite dev proxy issued the session cookie and flipped the UI
+to operator mode.
+
+### The full policy lifecycle, driven through the UI, landing onchain
+
+A timelock policy was created, funded, and released entirely through the browser UI (driven
+programmatically), each step a gated API call that produced a real transaction, verified against chain
+state with `cast`:
+
+| Step | Transaction | Onchain |
+| --- | --- | --- |
+| create timelock, policy 6 on v3 | [0xe6d608f0](https://testnet.arcscan.app/tx/0xe6d608f036a77c54c9ec8164e6383b68990a9b4ba665586d89bffc16cf81e3c5) | status true; read back conditionType 0 (Timelock), amount 20000, recipient matches the form |
+| fund 0.02 USDC | [0x5e6c95da](https://testnet.arcscan.app/tx/0x5e6c95da4eebdffbd3c1238992ec19497c713732bb5d46c89501908f9afc04a8) | status true |
+| release | [0x930cc21c](https://testnet.arcscan.app/tx/0x930cc21c4139490bedda770c2bf6e6be6a747d3aaf5a1166104fcc8a09562b82) | status true; statusOf(6) now 2 (Executed) |
+
+The negative paths are covered by the API tests (unauthenticated write rejected, invalid body
+rejected with the reason, a revert surfaced verbatim); the UI renders those verbatim reasons in its
+notices.
+
+### Build and reproduce
+
+`cd app && npm run build` is clean (typecheck plus Vite). To run locally: `npm run api` (with an
+`OPERATOR_SECRET`), then `cd app && npm run dev`, and open the proxied dev origin.
+
+### Pending (Part B)
+
+- Creation paths for attestation, oracle, recurring, and sweep; the approvals queue and system page.
+- A per-condition-type e2e like the timelock one above, once each path is built.
+- Deployed screenshots, once hosting is settled (shared with Part A's pending item).

@@ -28,3 +28,12 @@ export function relUnix(sec?: string | number) {
 
 /** The domain that is Arc, so cross-chain settlements can be tagged. */
 export const ARC_DOMAIN = 26;
+
+/** Decimal USDC to 6-decimal base units, or null if malformed or not positive. */
+export function toBaseUnits(decimal: string): string | null {
+  const s = decimal.trim();
+  if (!/^\d+(\.\d{1,6})?$/.test(s)) return null;
+  const [whole, frac = ""] = s.split(".");
+  const base = BigInt(whole) * 1_000_000n + BigInt((frac + "000000").slice(0, 6));
+  return base > 0n ? base.toString() : null;
+}

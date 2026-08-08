@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AppState } from "./api";
+import { api, type AppState, type Policy } from "./api";
 import { agoIso } from "./lib";
 import { Cards, DepegPanel, PoliciesTable, Receipts } from "./components/Read";
 import { Login } from "./components/Login";
 import { CreatePolicy } from "./components/CreatePolicy";
+import { PolicyDetail } from "./components/PolicyDetail";
 
 type Tab = "overview" | "policies" | "settlements";
 type Modal = null | "login" | "create";
@@ -14,6 +15,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>("overview");
   const [signedIn, setSignedIn] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
+  const [selected, setSelected] = useState<Policy | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -64,7 +66,7 @@ export function App() {
             <section><div className="grid-label">Depeg protection, live</div><DepegPanel o={state.oracle} /></section>
             <section>
               <div className="grid-label">Recent policies</div>
-              <PoliciesTable policies={state.policies.slice(-6)} />
+              <PoliciesTable policies={state.policies.slice(-6)} onSelect={setSelected} />
             </section>
             <section>
               <div className="grid-label">Recent settlements</div>
@@ -79,7 +81,7 @@ export function App() {
               <div className="grid-label" style={{ margin: 0 }}>All policies</div>
               <button className="btn small" onClick={requireOperator}>Create policy</button>
             </div>
-            <div style={{ marginTop: 14 }}><PoliciesTable policies={state.policies} /></div>
+            <div style={{ marginTop: 14 }}><PoliciesTable policies={state.policies} onSelect={setSelected} /></div>
           </section>
         )}
 
@@ -94,6 +96,15 @@ export function App() {
 
       {modal === "login" && <Login onClose={() => setModal(null)} onDone={() => setSignedIn(true)} />}
       {modal === "create" && <CreatePolicy onClose={() => setModal(null)} onCreated={load} />}
+      {selected && (
+        <PolicyDetail
+          policy={state?.policies.find((p) => p.vault === selected.vault && p.id === selected.id) ?? selected}
+          signedIn={signedIn}
+          onClose={() => setSelected(null)}
+          onChanged={load}
+          onRequireLogin={() => setModal("login")}
+        />
+      )}
     </div>
   );
 }

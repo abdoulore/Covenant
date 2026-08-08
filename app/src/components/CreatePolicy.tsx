@@ -1,20 +1,11 @@
 import { useMemo, useState } from "react";
 import { api, ApiError, type WriteResult } from "../api";
-import { usdc } from "../lib";
+import { toBaseUnits, usdc } from "../lib";
 
 type Kind = "timelock" | "approval";
 type Step = "form" | "review" | "result";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
-
-/** Decimal USDC to 6-decimal base units, or null if malformed or not positive. */
-function toBaseUnits(decimal: string): string | null {
-  const s = decimal.trim();
-  if (!/^\d+(\.\d{1,6})?$/.test(s)) return null;
-  const [whole, frac = ""] = s.split(".");
-  const base = BigInt(whole) * 1_000_000n + BigInt((frac + "000000").slice(0, 6));
-  return base > 0n ? base.toString() : null;
-}
 
 const DEST = [
   { domain: 26, name: "Arc (same chain)" },
