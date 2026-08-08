@@ -150,6 +150,16 @@ release), the approvals queue, settlements, and the system page (deployed contra
 key-authority map, and outstanding keeper work derived live from chain rather than a fabricated
 last-run time).
 
+### Credentials are provably absent from the client bundle
+
+The signing boundary (D12, B2.1) is enforced, not asserted. `npm run build` ends with
+`scripts/check-bundle-secrets.mjs`, which greps every built file in `dist/` for the exact secret
+values in the repo `.env` (any key whose name looks sensitive) plus generic markers like
+`entitySecret` and `-----BEGIN`. A clean build reports "no secret material found". Proven both ways:
+injecting the real `DEPLOYER_PRIVATE_KEY` value into a bundle file made the check fail with exit 1,
+naming the key (never printing the value); removing it passed again. So a bundle that ever embedded a
+key cannot ship.
+
 ### Pending (Part B)
 
 - A live per-type e2e for attestation, recurring, and sweep (built and validated; timelock and oracle

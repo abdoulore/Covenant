@@ -6,7 +6,8 @@
   "description": "Covenant product app: operate the treasury engine from the browser. Static SPA, talks only to the Covenant API.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && npm run check:secrets",
+    "check:secrets": "node scripts/check-bundle-secrets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
