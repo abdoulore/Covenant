@@ -25,6 +25,7 @@
     "gateway:authorize": "npm exec --workspace executor -- tsx --env-file=../.env scripts/gateway-authorize-delegate.ts",
     "demo:gateway": "npm exec --workspace executor -- tsx --env-file=../.env scripts/demo-gateway-funding.ts",
     "dashboard": "npm exec --workspace executor -- tsx --env-file=../.env src/dashboard/server.ts",
+    "api": "npm exec --workspace executor -- tsx --env-file=../.env src/api/start.ts",
     "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts"
   },
   "engines": {
