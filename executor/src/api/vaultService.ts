@@ -24,6 +24,9 @@ const { initiateDeveloperControlledWalletsClient } = require("@circle-fin/develo
 
 const CONDITION = { Timelock: 0, Approval: 1, Attestation: 2, Oracle: 3 } as const;
 const CURRENCY = { USDC: 0, EURC: 1 } as const;
+const COMPARATOR = { Gte: 0, Lte: 1 } as const;
+
+export type ComparatorName = keyof typeof COMPARATOR;
 const TERMINAL_OK = new Set(["COMPLETE", "CONFIRMED"]);
 const TERMINAL_BAD = ["FAILED", "DENIED", "CANCELLED"];
 
@@ -46,6 +49,26 @@ export interface CreateApprovalInput {
   destinationDomain: number;
   approvers: `0x${string}`[];
   threshold: number;
+}
+
+export interface CreateAttestationInput {
+  recipient: `0x${string}`; amount: string; payoutCurrency: PayoutCurrencyName; destinationDomain: number;
+  attester: `0x${string}`;
+}
+
+export interface CreateOracleInput {
+  recipient: `0x${string}`; amount: string; payoutCurrency: PayoutCurrencyName; destinationDomain: number;
+  comparator: ComparatorName; threshold: string; /* int256 in the feed's 8 decimals, as a string */ maxStaleSeconds: number;
+}
+
+export interface CreateRecurringInput {
+  recipient: `0x${string}`; payoutCurrency: PayoutCurrencyName; destinationDomain: number;
+  amountPerPeriod: string; interval: number; startTime: number; periods: number; maxCatchUp: number;
+}
+
+export interface CreateSweepInput {
+  recipient: `0x${string}`; payoutCurrency: PayoutCurrencyName; destinationDomain: number;
+  buffer: string; minSweep: string; interval: number; startTime: number; maxCatchUp: number;
 }
 
 export interface WriteResult {
@@ -71,6 +94,8 @@ export class VaultService {
     private readonly publicClient: PublicClient,
     private readonly walletClient: WalletClient,
     private readonly explorerTxUrl: (h: string) => string,
+    /** The deployed PythAggregatorV3 wrapper for USDC/USD, the only oracle feed supported in v1. */
+    private readonly pythWrapperUsdc: string,
   ) {}
 
   /** Build the service from the environment, resolving the Circle treasury wallet. */
@@ -97,6 +122,7 @@ export class VaultService {
       need("POLICY_VAULT_V3_ADDRESS") as `0x${string}`,
       need("ARC_USDC_ADDRESS") as `0x${string}`,
       publicClient, walletClient, arc.explorerTxUrl,
+      process.env.ARC_PYTH_WRAPPER_USDC ?? "",
     );
   }
 
@@ -143,6 +169,50 @@ export class VaultService {
       this.vault,
       "createPolicy(address,uint256,uint8,uint32,uint8,uint64,address[],uint8)",
       [input.recipient, input.amount, CURRENCY[input.payoutCurrency], input.destinationDomain, CONDITION.Approval, 0, input.approvers, input.threshold],
+    );
+    return { policyId: policyId.toString(), ...this.result(txHash) };
+  }
+
+  async createAttestation(input: CreateAttestationInput): Promise<CreateResult> {
+    const policyId = await this.nextPolicyId();
+    const txHash = await this.ownerSend(
+      this.vault,
+      "createAttestationPolicy(address,uint256,uint8,uint32,address)",
+      [input.recipient, input.amount, CURRENCY[input.payoutCurrency], input.destinationDomain, input.attester],
+    );
+    return { policyId: policyId.toString(), ...this.result(txHash) };
+  }
+
+  async createOracle(input: CreateOracleInput): Promise<CreateResult> {
+    if (!this.pythWrapperUsdc) throw new Error("ARC_PYTH_WRAPPER_USDC is not set; the oracle feed is unavailable.");
+    const policyId = await this.nextPolicyId();
+    const txHash = await this.ownerSend(
+      this.vault,
+      "createOraclePolicy(address,uint256,uint8,uint32,address,uint8,int256,uint64)",
+      [input.recipient, input.amount, CURRENCY[input.payoutCurrency], input.destinationDomain,
+        this.pythWrapperUsdc, COMPARATOR[input.comparator], input.threshold, input.maxStaleSeconds.toString()],
+    );
+    return { policyId: policyId.toString(), ...this.result(txHash) };
+  }
+
+  async createRecurring(input: CreateRecurringInput): Promise<CreateResult> {
+    const policyId = await this.nextPolicyId();
+    const txHash = await this.ownerSend(
+      this.vault,
+      "createRecurringPolicy(address,uint8,uint32,uint256,uint64,uint64,uint32,uint64)",
+      [input.recipient, CURRENCY[input.payoutCurrency], input.destinationDomain, input.amountPerPeriod,
+        input.interval.toString(), input.startTime.toString(), input.periods.toString(), input.maxCatchUp.toString()],
+    );
+    return { policyId: policyId.toString(), ...this.result(txHash) };
+  }
+
+  async createSweep(input: CreateSweepInput): Promise<CreateResult> {
+    const policyId = await this.nextPolicyId();
+    const txHash = await this.ownerSend(
+      this.vault,
+      "createSweepPolicy(address,uint8,uint32,uint256,uint256,uint64,uint64,uint64)",
+      [input.recipient, CURRENCY[input.payoutCurrency], input.destinationDomain, input.buffer, input.minSweep,
+        input.interval.toString(), input.startTime.toString(), input.maxCatchUp.toString()],
     );
     return { policyId: policyId.toString(), ...this.result(txHash) };
   }

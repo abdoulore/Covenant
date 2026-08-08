@@ -22,6 +22,10 @@ const CURRENCIES: PayoutCurrencyName[] = ["USDC", "EURC"];
 export interface VaultServiceLike {
   createTimelock(input: any): Promise<CreateResult>;
   createApproval(input: any): Promise<CreateResult>;
+  createAttestation(input: any): Promise<CreateResult>;
+  createOracle(input: any): Promise<CreateResult>;
+  createRecurring(input: any): Promise<CreateResult>;
+  createSweep(input: any): Promise<CreateResult>;
   fund(policyId: string, amount: string): Promise<WriteResult>;
   approve(policyId: string): Promise<WriteResult>;
   release(policyId: string): Promise<WriteResult>;
@@ -39,7 +43,11 @@ export interface ApiDeps {
 
 const isAddress = (v: unknown): v is `0x${string}` => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v);
 const isBaseUnits = (v: unknown): v is string => typeof v === "string" && /^[0-9]+$/.test(v) && v !== "0";
+const isNonNegBaseUnits = (v: unknown): v is string => typeof v === "string" && /^[0-9]+$/.test(v);
 const isUnixTime = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v > 0;
+const isPosInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v > 0;
+const isNonNegInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+const COMPARATORS = ["Gte", "Lte"];
 
 class BadRequest extends Error {}
 
@@ -166,7 +174,52 @@ export function createRequestHandler(deps: ApiDeps) {
                 destinationDomain: Number(body.destinationDomain), approvers: body.approvers, threshold,
               });
             }
-            throw new BadRequest('type must be "timelock" or "approval" (more condition types land next)');
+            if (body.type === "attestation") {
+              if (!isAddress(body.recipient)) throw new BadRequest("recipient must be a 0x address");
+              if (!isBaseUnits(body.amount)) throw new BadRequest("amount must be a positive base-unit string");
+              if (!isAddress(body.attester)) throw new BadRequest("attester must be a 0x address");
+              return svc.createAttestation({
+                recipient: body.recipient, amount: body.amount, payoutCurrency: requireCurrency(body.payoutCurrency),
+                destinationDomain: Number(body.destinationDomain), attester: body.attester,
+              });
+            }
+            if (body.type === "oracle") {
+              if (!isAddress(body.recipient)) throw new BadRequest("recipient must be a 0x address");
+              if (!isBaseUnits(body.amount)) throw new BadRequest("amount must be a positive base-unit string");
+              if (body.feedKey !== "USDC/USD") throw new BadRequest('feedKey must be "USDC/USD" (the only supported feed in v1)');
+              if (typeof body.comparator !== "string" || !COMPARATORS.includes(body.comparator)) throw new BadRequest("comparator must be Gte or Lte");
+              if (!isBaseUnits(body.threshold)) throw new BadRequest("threshold must be a positive integer string in the feed's 8 decimals");
+              if (!isPosInt(body.maxStaleSeconds)) throw new BadRequest("maxStaleSeconds must be a positive integer");
+              return svc.createOracle({
+                recipient: body.recipient, amount: body.amount, payoutCurrency: requireCurrency(body.payoutCurrency),
+                destinationDomain: Number(body.destinationDomain), comparator: body.comparator, threshold: body.threshold, maxStaleSeconds: body.maxStaleSeconds,
+              });
+            }
+            if (body.type === "recurring") {
+              if (!isAddress(body.recipient)) throw new BadRequest("recipient must be a 0x address");
+              if (!isBaseUnits(body.amountPerPeriod)) throw new BadRequest("amountPerPeriod must be a positive base-unit string");
+              if (!isPosInt(body.interval)) throw new BadRequest("interval must be a positive integer (seconds)");
+              if (!isUnixTime(body.startTime)) throw new BadRequest("startTime must be a positive unix timestamp");
+              if (!isNonNegInt(body.periods)) throw new BadRequest("periods must be a non-negative integer (0 = open-ended)");
+              if (!isPosInt(body.maxCatchUp)) throw new BadRequest("maxCatchUp must be a positive integer (seconds)");
+              return svc.createRecurring({
+                recipient: body.recipient, payoutCurrency: requireCurrency(body.payoutCurrency), destinationDomain: Number(body.destinationDomain),
+                amountPerPeriod: body.amountPerPeriod, interval: body.interval, startTime: body.startTime, periods: body.periods, maxCatchUp: body.maxCatchUp,
+              });
+            }
+            if (body.type === "sweep") {
+              if (!isAddress(body.recipient)) throw new BadRequest("recipient must be a 0x address");
+              if (!isNonNegBaseUnits(body.buffer)) throw new BadRequest("buffer must be a base-unit string (0 or more)");
+              if (!isBaseUnits(body.minSweep)) throw new BadRequest("minSweep must be a positive base-unit string");
+              if (!isPosInt(body.interval)) throw new BadRequest("interval must be a positive integer (seconds)");
+              if (!isUnixTime(body.startTime)) throw new BadRequest("startTime must be a positive unix timestamp");
+              if (!isPosInt(body.maxCatchUp)) throw new BadRequest("maxCatchUp must be a positive integer (seconds)");
+              return svc.createSweep({
+                recipient: body.recipient, payoutCurrency: requireCurrency(body.payoutCurrency), destinationDomain: Number(body.destinationDomain),
+                buffer: body.buffer, minSweep: body.minSweep, interval: body.interval, startTime: body.startTime, maxCatchUp: body.maxCatchUp,
+              });
+            }
+            throw new BadRequest('type must be one of timelock, approval, attestation, oracle, recurring, sweep');
           });
           return;
         }

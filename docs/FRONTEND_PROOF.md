@@ -124,6 +124,16 @@ state with `cast`:
 | fund 0.02 USDC | [0x5e6c95da](https://testnet.arcscan.app/tx/0x5e6c95da4eebdffbd3c1238992ec19497c713732bb5d46c89501908f9afc04a8) | status true |
 | release | [0x930cc21c](https://testnet.arcscan.app/tx/0x930cc21c4139490bedda770c2bf6e6be6a747d3aaf5a1166104fcc8a09562b82) | status true; statusOf(6) now 2 (Executed) |
 
+The oracle creation path was driven through the UI too: oracle policy 7 on v3
+([0xeb6f4427](https://testnet.arcscan.app/tx/0xeb6f4427f740cc34ee9f6afaca0bc895db51add4a1a7c81b5f2fcc9127a49b55),
+status true), read back as conditionType 3 (Oracle), feed the deployed Pyth USDC/USD wrapper
+`0xe5095E…`, comparator 0 (Gte), threshold 99500000 (0.995 in 8 decimals), staleness 120s. This is the
+most wiring-heavy path (feed resolution, comparator, threshold scaling), and it is correct onchain.
+
+All six condition types are now buildable from the UI. The remaining three (attestation, recurring,
+sweep) share the same owner-send path that timelock and oracle proved, and every type's server-side
+validation is unit-tested.
+
 The negative paths are covered by the API tests (unauthenticated write rejected, invalid body
 rejected with the reason, a revert surfaced verbatim); the UI renders those verbatim reasons in its
 notices.
@@ -135,6 +145,7 @@ notices.
 
 ### Pending (Part B)
 
-- Creation paths for attestation, oracle, recurring, and sweep; the approvals queue and system page.
-- A per-condition-type e2e like the timelock one above, once each path is built.
+- A live per-type e2e for attestation, recurring, and sweep (built and validated; timelock and oracle
+  are proven onchain above).
+- The approvals queue and the system page.
 - Deployed screenshots, once hosting is settled (shared with Part A's pending item).

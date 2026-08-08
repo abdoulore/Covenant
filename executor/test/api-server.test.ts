@@ -10,6 +10,10 @@ class StubService implements VaultServiceLike {
   calls: string[] = [];
   async createTimelock(input: any) { this.calls.push("createTimelock"); return { policyId: "7", txHash: "0xabc", explorerUrl: "u" }; }
   async createApproval(input: any) { this.calls.push("createApproval"); return { policyId: "8", txHash: "0xdef", explorerUrl: "u" }; }
+  async createAttestation(input: any) { this.calls.push("createAttestation"); return { policyId: "9", txHash: "0x1", explorerUrl: "u" }; }
+  async createOracle(input: any) { this.calls.push("createOracle"); return { policyId: "10", txHash: "0x2", explorerUrl: "u" }; }
+  async createRecurring(input: any) { this.calls.push("createRecurring"); return { policyId: "11", txHash: "0x3", explorerUrl: "u" }; }
+  async createSweep(input: any) { this.calls.push("createSweep"); return { policyId: "12", txHash: "0x4", explorerUrl: "u" }; }
   async fund(policyId: string, amount: string) { this.calls.push(`fund:${policyId}:${amount}`); return { txHash: "0xf", explorerUrl: "u" }; }
   async approve(policyId: string) { this.calls.push(`approve:${policyId}`); return { txHash: "0xa", explorerUrl: "u" }; }
   async release(policyId: string) { this.calls.push(`release:${policyId}`); return { txHash: "0xr", explorerUrl: "u" }; }

@@ -95,7 +95,7 @@ export function App() {
       </footer>
 
       {modal === "login" && <Login onClose={() => setModal(null)} onDone={() => setSignedIn(true)} />}
-      {modal === "create" && <CreatePolicy onClose={() => setModal(null)} onCreated={load} />}
+      {modal === "create" && <CreatePolicy onClose={() => setModal(null)} onCreated={load} oraclePrice={state?.oracle?.price ?? null} />}
       {selected && (
         <PolicyDetail
           policy={state?.policies.find((p) => p.vault === selected.vault && p.id === selected.id) ?? selected}

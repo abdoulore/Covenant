@@ -80,6 +80,25 @@ export const api = {
     recipient: string; amount: string; payoutCurrency: string; destinationDomain: number; approvers: string[]; threshold: number;
   }) => write<WriteResult>("/policies", { type: "approval", ...p }),
 
+  createAttestation: (p: {
+    recipient: string; amount: string; payoutCurrency: string; destinationDomain: number; attester: string;
+  }) => write<WriteResult>("/policies", { type: "attestation", ...p }),
+
+  createOracle: (p: {
+    recipient: string; amount: string; payoutCurrency: string; destinationDomain: number;
+    feedKey: "USDC/USD"; comparator: "Gte" | "Lte"; threshold: string; maxStaleSeconds: number;
+  }) => write<WriteResult>("/policies", { type: "oracle", ...p }),
+
+  createRecurring: (p: {
+    recipient: string; payoutCurrency: string; destinationDomain: number;
+    amountPerPeriod: string; interval: number; startTime: number; periods: number; maxCatchUp: number;
+  }) => write<WriteResult>("/policies", { type: "recurring", ...p }),
+
+  createSweep: (p: {
+    recipient: string; payoutCurrency: string; destinationDomain: number;
+    buffer: string; minSweep: string; interval: number; startTime: number; maxCatchUp: number;
+  }) => write<WriteResult>("/policies", { type: "sweep", ...p }),
+
   fund: (policyId: string, amount: string) => write<WriteResult>(`/policies/${policyId}/fund`, { amount }),
   approve: (policyId: string) => write<WriteResult>(`/policies/${policyId}/approve`),
   release: (policyId: string) => write<WriteResult>(`/policies/${policyId}/release`),
