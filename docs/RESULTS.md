@@ -135,6 +135,19 @@ Catch-up is bounded and safe. A period overdue beyond the policy's `maxCatchUp` 
 
 This is the treasury-safe default: a schedule forgotten for two months does not auto-pay the day someone finally runs the keeper. The overdue period holds, and the owner decides.
 
+### Sweep, policy 5 on v3
+
+The other recurring shape. A sweep policy keeps a `buffer` and, on schedule, releases the balance above it to the recipient, skipping when the excess is below `minSweep`. Unlike payroll it does not retire: it stays active for top-ups. Policy 5 keeps a 0.05 USDC buffer and sweeps the excess every 4 seconds, with a 0.02 USDC dust floor.
+
+| Step | Tx | Result |
+| --- | --- | --- |
+| create | [0x1e6d2a99...b7960d6](https://testnet.arcscan.app/tx/0x1e6d2a990e50ce55918baefa6d161dfe567aa1a1c1ed6f20a1fe1889cb7960d6) | sweep policy 5, keep 0.05 USDC, sweep the rest every 4s |
+| sweep 1 | [0x838728c3...85e4cb0](https://testnet.arcscan.app/tx/0x838728c357d6d431cde3ff8d25cd4bcee2bd8d7aedac9e0be7f984f6b85e4cb0) | funded 0.15, released the **0.100000 USDC** excess, buffer kept. Payout [0x810c418b...8b1a1cf](https://testnet.arcscan.app/tx/0x810c418ba4a5f943a645d5e315f7288fb957f156bd773bc347f3bb1d38b1a1cf) |
+| dust floor | [0x8a86c461...34bee92](https://testnet.arcscan.app/tx/0x8a86c461db01d0666d0f0024db62e50d5d86f5fe7e62c34eb395cbb0b34bee92) | only the buffer left, the due period **reverted SweepBelowMin, status 0**. Funded stayed at 0.05, not swept to zero |
+| sweep 2 | [0xd64550e7...8b6758e](https://testnet.arcscan.app/tx/0xd64550e7fdb1ff09cf86b3da5fb5780235d19886e50581b1b6989548a8b6758e) | after a 0.08 top-up, released the **0.080000 USDC** excess. Payout [0xc1680f9f...ccd383e](https://testnet.arcscan.app/tx/0xc1680f9f21994756b1c9306c2dd0afcffccb040eb108a1230fa504fdcccd383e) |
+
+Two things are proven past the happy path. The dust floor holds the buffer onchain: the refused sweep is a real status-0 receipt, and `funded` read back at 0.05 USDC, the buffer untouched rather than swept to zero. And the policy stays live after a sweep, so the 0.08 top-up swept again on the next period. Each sweep is a separate `PolicyReleased` that settles independently by `policyId:periodIndex`, exactly like payroll. `npm run demo:sweep` reproduces it.
+
 ## Gateway
 
 A treasury can fund an Arc policy from a unified USDC balance sourced on another chain, with no manual bridge. This is Circle Gateway (Phase 2.2, Integration 1): the vault and its lock are unchanged, Gateway sits upstream on the funding side. Proven end to end at faucet scale.
@@ -240,6 +253,7 @@ npm run canary                # FX and cross-chain archetypes
 npm run demo:attestation      # release on a signed attestation
 npm run demo:oracle           # depeg-protection release on live Pyth data
 npm run demo:scheduling       # recurring payroll and the stale-hold path
+npm run demo:sweep            # sweep the excess above a buffer, with the dust floor
 npm run demo:gateway          # fund an Arc policy from USDC on Base Sepolia
 npm run failure-path          # the onchain revert when a condition is unmet
 npm run dashboard             # read-only monitor of policies and settlements

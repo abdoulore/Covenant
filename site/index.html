@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Covenant, programmable treasury settlement on Arc</title>
+<meta name="description" content="Lock USDC against onchain conditions, settle across currencies and chains automatically. Every claim links to a testnet transaction." />
+<style>
+  :root {
+    --bg: #0a0b0d; --panel: #101216; --panel2: #15181d; --line: #23272f;
+    --text: #e7e9ec; --muted: #949aa4; --dim: #626977;
+    --good: #46b968; --hold: #d3a03e; --bad: #e0655f; --live: #4bb3a4;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--live); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .mono { font-family: var(--mono); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 22px; }
+
+  /* section rhythm: airy, not the cockpit's density */
+  section { padding: 46px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin: 0 0 20px; }
+  h2 { font-size: 20px; font-weight: 640; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .lead { color: var(--muted); max-width: 62ch; margin: 0 0 26px; }
+
+  /* hero */
+  .hero { padding: 66px 0 40px; border-top: none; }
+  .brand { font-size: 15px; font-weight: 650; letter-spacing: 0.02em; color: var(--live); text-transform: uppercase; }
+  .hero h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.025em; font-weight: 660; margin: 16px 0 20px; max-width: 20ch; }
+  .hero p { color: var(--muted); font-size: 17px; line-height: 1.55; max-width: 60ch; margin: 0 0 14px; }
+  .hero .fine { color: var(--dim); font-size: 13px; margin-top: 22px; }
+  .hero .fine .mono { color: var(--muted); }
+  @media (max-width: 620px) { .hero h1 { font-size: 31px; } .hero { padding: 44px 0 32px; } }
+
+  /* depeg strip, carried over from the monitor */
+  .depeg { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; }
+  .depeg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .depeg-price { font-family: var(--mono); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+  .depeg-pair { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .verdict { font-size: 13px; font-weight: 600; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
+  .verdict.ok { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+  .verdict.warn { color: var(--bad); background: color-mix(in srgb, var(--bad) 15%, transparent); }
+  .gauge { position: relative; height: 46px; margin: 28px 0 8px; }
+  .gauge .track { position: absolute; top: 22px; left: 0; right: 0; height: 4px; border-radius: 2px; background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 55%, var(--panel2)) 0%, var(--panel2) 42%, var(--panel2) 100%); }
+  .gauge .tick { position: absolute; top: 12px; width: 1px; height: 24px; background: var(--line); }
+  .gauge .tick.thr { background: var(--hold); }
+  .gauge .tick.trg { background: var(--bad); }
+  .gauge .tick .lab { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; color: var(--dim); font-family: var(--mono); }
+  .gauge .conf { position: absolute; top: 19px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--live) 22%, transparent); }
+  .gauge .marker { position: absolute; top: 15px; width: 11px; height: 18px; border-radius: 3px; transform: translateX(-50%); border: 2px solid var(--bg); transition: left 0.6s ease; }
+  .depeg-readouts { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .ro .k { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  .ro .v { font-family: var(--mono); font-size: 15px; margin-top: 3px; }
+  .depeg.fallback { color: var(--muted); }
+  .depeg .cap { font-size: 12px; color: var(--dim); margin-top: 6px; }
+
+  /* six condition types */
+  .types { border-top: 1px solid var(--line); }
+  .type { display: grid; grid-template-columns: 150px 1fr auto; gap: 18px; align-items: baseline; padding: 16px 2px; border-bottom: 1px solid var(--line); }
+  .type .name { font-weight: 620; }
+  .type .desc { color: var(--muted); font-size: 14px; }
+  .type .proof { justify-self: end; white-space: nowrap; font-size: 13px; }
+  .type .proof .mono { font-size: 12.5px; }
+  @media (max-width: 620px) {
+    .type { grid-template-columns: 1fr; gap: 4px; }
+    .type .proof { justify-self: start; margin-top: 4px; }
+  }
+
+  /* signature receipt */
+  .receipt { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; }
+  .receipt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .receipt-head .who { font-weight: 620; }
+  .receipt-head .amt { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+  .stop .k { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  .stop .h { font-family: var(--mono); font-size: 13.5px; margin-top: 4px; }
+  .stop .sub { font-size: 12px; color: var(--dim); margin-top: 3px; }
+  .stop.r { text-align: right; }
+  .held { text-align: center; }
+  .held .arrow { color: var(--line); font-size: 18px; line-height: 1; }
+  .held .n { font-family: var(--mono); font-size: 14px; color: var(--live); margin-top: 4px; white-space: nowrap; }
+  .held .cap { font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .receipt-notes { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .receipt-notes .k { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  .receipt-notes .v { font-family: var(--mono); font-size: 14px; margin-top: 3px; }
+  .receipt-notes .v.good { color: var(--good); }
+  @media (max-width: 620px) {
+    .flow { grid-template-columns: 1fr; gap: 8px; text-align: left; }
+    .stop.r { text-align: left; }
+    .held { text-align: left; } .held .arrow { display: none; }
+  }
+
+  /* circle stack */
+  .stack { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stack .cell { background: var(--panel); padding: 18px 20px; }
+  .stack .cell .p { font-weight: 620; font-size: 14px; }
+  .stack .cell .d { color: var(--muted); font-size: 13.5px; margin-top: 5px; }
+  @media (max-width: 620px) { .stack { grid-template-columns: 1fr; } }
+
+  /* numbers */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stat { background: var(--panel); padding: 18px 20px; }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat .k { color: var(--dim); font-size: 12px; margin-top: 6px; line-height: 1.35; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 380px) { .stats { grid-template-columns: 1fr; } }
+  .addrs { margin-top: 22px; display: flex; gap: 28px; flex-wrap: wrap; }
+  .addrs .a .k { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  .addrs .a .v { font-family: var(--mono); font-size: 13px; margin-top: 3px; }
+
+  footer { border-top: 1px solid var(--line); padding: 26px 0 60px; color: var(--dim); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer .links a { margin-right: 20px; }
+
+  .skeleton { height: 14px; border-radius: 4px; background: linear-gradient(90deg, var(--panel) 0%, var(--panel2) 50%, var(--panel) 100%); background-size: 200% 100%; animation: sh 1.3s infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .gauge .marker { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="hero">
+    <div class="brand">Covenant</div>
+    <h1>Programmable treasury settlement on Arc.</h1>
+    <p>Lock USDC in an onchain vault against a release condition. The moment the condition is met, settlement runs itself across currencies and chains. The contract decides whether the money moves. Nobody signs after the trigger.</p>
+    <div class="fine">Every claim on this page links to a transaction on a public testnet explorer. Built for the Circle brief on stablecoin-native DeFi on Arc. <span class="mono">Testnet only.</span></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Live oracle, USDC/USD depeg protection</div>
+    <div id="depeg"><div class="depeg"><div class="skeleton" style="width:55%;height:40px"></div></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Six release conditions, each proven onchain</div>
+    <h2>The contract, not a server, decides whether a payment fires.</h2>
+    <p class="lead">A policy releases only when its condition is met. Each type below links to the transaction that proves it on live testnet.</p>
+    <div class="types" id="types"></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">One settlement, every moving part</div>
+    <h2>A cross-chain payment that runs itself, honest about its one trust window.</h2>
+    <p class="lead">A policy releases 0.5 USDC on Arc and pays a recipient on Base Sepolia. The executor burns through CCTP v2, and Circle's forwarder mints straight to the recipient, so the recipient needs no gas token on the destination chain.</p>
+    <div class="receipt">
+      <div class="receipt-head">
+        <span class="who">Cross-chain settlement <span class="dim">/ policy 2</span></span>
+        <span class="amt">0.5 USDC policy, Arc to Base Sepolia</span>
+      </div>
+      <div class="flow">
+        <div class="stop">
+          <div class="k">FUNDS LEFT VAULT</div>
+          <div class="h"><a href="https://testnet.arcscan.app/tx/0xf2ef10c2dd7a15cd4f69e0cf6689e3eb175b632cafbae7b750f85c6131bcee59" target="_blank" rel="noopener">0xf2ef10c2...6131bcee59</a></div>
+          <div class="sub">release on Arc, condition met</div>
+        </div>
+        <div class="held">
+          <div class="arrow">&rarr;</div>
+          <div class="n">held 28.8s</div>
+          <div class="cap">cross-chain, incl. bridge</div>
+        </div>
+        <div class="stop r">
+          <div class="k">RECIPIENT PAID</div>
+          <div class="h"><a href="https://sepolia.basescan.org/tx/0x68263cfcf2f38df680b769a65697cab9b3677f3cabba1b21ae28f020253844fe" target="_blank" rel="noopener">0x68263cfc...0253844fe</a></div>
+          <div class="sub">CCTP mint, direct to recipient</div>
+        </div>
+      </div>
+      <div class="receipt-notes">
+        <div><div class="k">DELIVERED</div><div class="v good">0.606602 USDC</div></div>
+        <div><div class="k">FOR A POLICY OF</div><div class="v">0.500000 USDC</div></div>
+        <div><div class="k">RECIPIENT GAS HELD</div><div class="v">0 ETH</div></div>
+        <div><div class="k">CUSTODY GAP</div><div class="v">measured, per tx</div></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:22px">The recipient received more than the policy amount, never less: the forwarder fee is deducted from the mint, so the executor grosses up the burn from its own balance. The fee is flat, 0.053301 USDC, a rounding error at treasury size. The custody gap, the seconds the executor holds funds between release and payout, is timestamped on every settlement rather than glossed over.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">How it is built</div>
+    <h2>The Circle stack, each part doing one job.</h2>
+    <p class="lead">Nothing here is a logo for a product Covenant does not use.</p>
+    <div class="stack">
+      <div class="cell"><div class="p">Arc</div><div class="d">USDC-native L1 with sub-second finality. The vault deploys for six cents, priced in dollars, with no separate volatile gas token.</div></div>
+      <div class="cell"><div class="p">USDC</div><div class="d">The native gas token and the settlement asset. Amounts, fees, and deploy cost are all in dollars.</div></div>
+      <div class="cell"><div class="p">Circle Wallets</div><div class="d">Developer-controlled treasury, executor, and recipient wallets, behind one interface for a later move to user-controlled wallets.</div></div>
+      <div class="cell"><div class="p">App Kit</div><div class="d">The FX swap, USDC to EURC, and the payout send, run server-side with idempotent settlement state.</div></div>
+      <div class="cell"><div class="p">CCTP v2</div><div class="d">Native cross-chain USDC by burn and mint, with a forwarder so the recipient needs no gas on the destination chain.</div></div>
+      <div class="cell"><div class="p">Gateway</div><div class="d">Fund an Arc policy from a unified USDC balance sourced on another chain, with no manual bridge.</div></div>
+      <div class="cell"><div class="p">Pyth</div><div class="d">A pull oracle deployed on Arc, reachable with no credentials. It drives the depeg condition above through a standard aggregator interface.</div></div>
+      <div class="cell"><div class="p">PolicyVault</div><div class="d">The onchain contract that holds the USDC and enforces the release condition. It refuses to move funds whose condition is unmet.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Measured on live testnet</div>
+    <h2>Numbers, each traceable to a transaction.</h2>
+    <p class="lead">Full hashes and explorer links for every figure are in RESULTS.md.</p>
+    <div class="stats">
+      <div class="stat"><div class="v">210</div><div class="k">automated tests, contract and executor</div></div>
+      <div class="stat"><div class="v">6.8s</div><div class="k">attestation, signed release to paid</div></div>
+      <div class="stat"><div class="v">9.0s</div><div class="k">oracle, depeg release to paid</div></div>
+      <div class="stat"><div class="v">16.6s</div><div class="k">FX settlement on Arc, release to paid</div></div>
+      <div class="stat"><div class="v">28.8s</div><div class="k">cross-chain, Arc to Base Sepolia</div></div>
+      <div class="stat"><div class="v">0.0592</div><div class="k">USDC to deploy the vault, six cents</div></div>
+      <div class="stat"><div class="v">0.0533</div><div class="k">USDC forwarder fee, flat not proportional</div></div>
+      <div class="stat"><div class="v">0</div><div class="k">ETH held by a paid cross-chain recipient</div></div>
+    </div>
+    <div class="addrs">
+      <div class="a"><div class="k">POLICYVAULT V2, FOUR CONDITIONS AND ORACLE</div><div class="v"><a href="https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1" target="_blank" rel="noopener">0xB702404EA947aec698323Cd42989CA6168f209D1</a></div></div>
+      <div class="a"><div class="k">POLICYVAULT V3, RECURRING AND SWEEP</div><div class="v"><a href="https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300" target="_blank" rel="noopener">0xDC0040eB02c438D59838A6f178e38184eACf7300</a></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Programmable treasury settlement on Arc. Testnet only.</span>
+    <span class="links">
+      <a href="https://github.com/abdoulore/Covenant" target="_blank" rel="noopener">Repository</a>
+      <a href="https://github.com/abdoulore/Covenant/blob/main/docs/RESULTS.md" target="_blank" rel="noopener">RESULTS.md</a>
+    </span>
+  </footer>
+
+</div>
+
+<script>
+// The six release conditions, each linked to its onchain proof in RESULTS.md.
+const ARC = "https://testnet.arcscan.app/tx/";
+const TYPES = [
+  { name: "Timelock", desc: "Releasable only after a timestamp.", short: "0x26e1acf0...6664019ee", tx: "0x26e1acf092070b3f3731662aeb2c549d0bff50daee3a102ad6cf3826664019ee", note: "refused early, status 0" },
+  { name: "Approval", desc: "Releasable after N-of-M named approvers sign.", short: "0xd5a5008b...d4a08c27c9", tx: "0xd5a5008b280fcfbe8d2713fc0f4383eadbfadbc038cec4fe504e77d4a08c27c9", note: "release" },
+  { name: "Attestation", desc: "Releasable when a named attester signs an EIP-712 statement.", short: "0xaa1e518a...0d438e5659", tx: "0xaa1e518abc7cb2109b381f76735312ba92b63182a9d89d25a0460f0d438e5659", note: "attest, verified onchain" },
+  { name: "Oracle", desc: "Releasable when a price feed crosses a threshold.", short: "0x02173d2f...e6ea1a3ff80d3", tx: "0x02173d2f68f74800ad3fe7132815d4b09a6bd0a9b5de0bfaf69e6ea1a3ff80d3", note: "release on live Pyth" },
+  { name: "Recurring", desc: "A fixed slice each interval, each period settled on its own.", short: "0xab3ca192...3fc377d1b92", tx: "0xab3ca192218daa03580edfc56f82382eef7218e7433a84dda03d39fc377d1b92", note: "payroll period 1" },
+  { name: "Sweep", desc: "The balance above a buffer, on a schedule, with a dust floor.", short: "0x838728c3...84f6b85e4cb0", tx: "0x838728c357d6d431cde3ff8d25cd4bcee2bd8d7aedac9e0be7f984f6b85e4cb0", note: "sweep the excess" },
+];
+document.getElementById("types").innerHTML = TYPES.map((t) => `
+  <div class="type">
+    <div class="name">${t.name}</div>
+    <div class="desc">${t.desc}</div>
+    <div class="proof"><a class="mono" href="${ARC}${t.tx}" target="_blank" rel="noopener">${t.short}</a> <span class="dim">${t.note} &rarr;</span></div>
+  </div>`).join("");
+
+// Live depeg strip. Reads Hermes directly from the browser (CORS allowed, verified), so the
+// page stays fully static with no backend. Degrades to a static rule-and-proof panel on failure,
+// never a fabricated price and never a bare error.
+const FEED = "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
+const HERMES = `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${FEED}&parsed=true`;
+let lastPublish = null;
+
+function agoUnix(sec) { const s = Math.max(0, Math.floor(Date.now() / 1000 - sec)); return s < 90 ? s + "s ago" : Math.floor(s / 60) + "m ago"; }
+
+function gaugePanel(o) {
+  const pegFloor = 0.995, depegTrig = 0.99, lo = 0.98, hi = 1.005, span = hi - lo;
+  const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / span) * 100));
+  const met = o.price >= pegFloor;
+  const confW = Math.min(30, (o.conf / span) * 100);
+  return `
+  <div class="depeg">
+    <div class="depeg-head">
+      <div>
+        <div class="depeg-price">${o.price.toFixed(6)}</div>
+        <div class="depeg-pair">USDC/USD via Pyth, a pull oracle on Arc</div>
+      </div>
+      <div class="verdict ${met ? "ok" : "warn"}">${met ? "Holding peg, releasable" : "Below peg floor, held"}</div>
+    </div>
+    <div class="gauge">
+      <div class="track"></div>
+      <div class="tick trg" style="left:${pos(depegTrig)}%"><span class="lab">0.990 trigger</span></div>
+      <div class="tick thr" style="left:${pos(pegFloor)}%"><span class="lab">0.995 floor</span></div>
+      <div class="conf" style="left:${pos(o.price) - confW / 2}%;width:${confW}%"></div>
+      <div class="marker" style="left:${pos(o.price)}%;background:${met ? "var(--good)" : "var(--bad)"}"></div>
+    </div>
+    <div class="depeg-readouts">
+      <div class="ro"><div class="k">CONFIDENCE</div><div class="v">&plusmn;${o.conf.toFixed(6)}</div></div>
+      <div class="ro"><div class="k">RELEASE RULE</div><div class="v">price &ge; 0.995</div></div>
+      <div class="ro"><div class="k">STATE</div><div class="v" style="color:${met ? "var(--good)" : "var(--bad)"}">${met ? "condition met" : "condition unmet"}</div></div>
+      <div class="ro"><div class="k">UPDATED</div><div class="v" id="updated">${agoUnix(o.publishTime)}</div></div>
+    </div>
+  </div>`;
+}
+
+function fallbackPanel() {
+  return `
+  <div class="depeg fallback">
+    <div class="depeg-head">
+      <div><div style="font-weight:620;color:var(--text)">USDC/USD depeg protection</div>
+      <div class="depeg-pair">Live Pyth read is momentarily unavailable.</div></div>
+    </div>
+    <div style="margin-top:14px">The policy releases only while USDC holds its peg: <span class="mono" style="color:var(--text)">price &ge; 0.995</span>, checked onchain against a live Pyth feed. It is proven on testnet, release to paid in 9.0 seconds.</div>
+    <div class="cap"><a href="${ARC}0x02173d2f68f74800ad3fe7132815d4b09a6bd0a9b5de0bfaf69e6ea1a3ff80d3" target="_blank" rel="noopener">See the onchain release</a>, or the live monitor via <span class="mono">npm run dashboard</span>.</div>
+  </div>`;
+}
+
+async function loadPrice() {
+  try {
+    const res = await fetch(HERMES, { cache: "no-store" });
+    if (!res.ok) throw new Error(String(res.status));
+    const j = await res.json();
+    const p = j.parsed && j.parsed[0] && j.parsed[0].price;
+    if (!p) throw new Error("no price");
+    const o = { price: Number(p.price) * 10 ** p.expo, conf: Number(p.conf) * 10 ** p.expo, publishTime: p.publish_time };
+    lastPublish = o.publishTime;
+    document.getElementById("depeg").innerHTML = gaugePanel(o);
+  } catch (e) {
+    lastPublish = null;
+    document.getElementById("depeg").innerHTML = fallbackPanel();
+  }
+}
+loadPrice();
+setInterval(loadPrice, 20000);
+// Tick the "updated" label every second between fetches, so the strip reads as live.
+setInterval(() => {
+  if (lastPublish == null) return;
+  const el = document.getElementById("updated");
+  if (el) el.textContent = agoUnix(lastPublish);
+}, 1000);
+</script>
+</body>
+</html>

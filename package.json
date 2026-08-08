@@ -21,6 +21,7 @@
     "demo:attestation": "npm exec --workspace executor -- tsx --env-file=../.env scripts/attestation-demo.ts",
     "demo:oracle": "npm exec --workspace executor -- tsx --env-file=../.env scripts/pyth-oracle-demo.ts",
     "demo:scheduling": "npm exec --workspace executor -- tsx --env-file=../.env scripts/scheduling-demo.ts",
+    "demo:sweep": "npm exec --workspace executor -- tsx --env-file=../.env scripts/sweep-demo.ts",
     "gateway:authorize": "npm exec --workspace executor -- tsx --env-file=../.env scripts/gateway-authorize-delegate.ts",
     "demo:gateway": "npm exec --workspace executor -- tsx --env-file=../.env scripts/demo-gateway-funding.ts",
     "dashboard": "npm exec --workspace executor -- tsx --env-file=../.env src/dashboard/server.ts",
