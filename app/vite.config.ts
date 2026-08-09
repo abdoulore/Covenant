@@ -8,7 +8,16 @@ import react from "@vitejs/plugin-react";
 // on a non-default port.
 const apiTarget = process.env.COVENANT_API_TARGET ?? "http://localhost:4320";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  /**
+   * The production bundle is served under /app on the same host as the landing page, so its asset
+   * URLs have to be prefixed or the browser requests them from the root and gets the landing page's
+   * HTML back with a JavaScript content type.
+   *
+   * Only on build. The dev server serves at the root and proxies /api, and prefixing there would
+   * break both.
+   */
+  base: command === "build" ? "/app/" : "/",
   plugins: [react()],
   server: {
     port: 5173,
@@ -17,4 +26,4 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist", sourcemap: false },
-});
+}));

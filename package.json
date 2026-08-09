@@ -10,6 +10,7 @@
     "test": "npm run test:contracts && npm run test:executor",
     "test:contracts": "forge test --root contracts",
     "test:executor": "npm test --workspace executor",
+    "build:web": "npm --prefix app ci && npm --prefix app run build && node scripts/assemble-site.mjs",
     "test:count": "node scripts/check-test-count.mjs",
     "verify:hashes": "node scripts/verify-hashes.mjs",
     "typecheck": "tsc --noEmit -p executor/tsconfig.json && tsc --noEmit -p app/tsconfig.json",

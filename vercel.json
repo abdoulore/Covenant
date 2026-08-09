@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "dist",
+  "framework": null,
+  "rewrites": [
+    {
+      "comment": "The operator app is a single page with no server routes. Static files under /app are served directly and only unmatched paths fall through to its entry point.",
+      "source": "/app/:path*",
+      "destination": "/app/index.html"
+    }
+  ]
+}

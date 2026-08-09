@@ -129,10 +129,13 @@ Two halves with different requirements, and the split is not cosmetic.
 
 | Piece | What it is | Where it can run |
 | --- | --- | --- |
-| `site/` | static landing page | any static host |
-| `app/dist` | static operator bundle | any static host |
+| landing page and operator app | one static bundle, page at `/` and app at `/app` | any static host |
 | the write API | persistent Node process | a host that keeps a process alive |
 | the monitor | persistent Node process, read-only | same |
+
+`npm run build:web` produces the static half into `dist/`: the landing page at the root and the app under `/app`. They ship together on one host so the landing page links the app with a relative path. That is presentation only; the app's connection to the write API is cross-origin either way, because the API is not on that host.
+
+The build refuses to assemble if the app bundle was compiled without the `/app/` base, since its assets would otherwise resolve to the root and return the landing page's HTML instead of JavaScript.
 
 **The API must not run on serverless functions.** Two protections depend on state held in the process. Idempotency reserves an in-flight key so simultaneous duplicate writes collapse into one execution; login rate limiting counts attempts against the single operator secret. Split across instances, both silently stop working: two concurrent funds land on separate instances and both execute, and the brute-force ceiling becomes per-instance rather than global. Nothing errors. Run the API where one process handles all of it, or move both to shared storage first.
 
@@ -153,7 +156,11 @@ The session cookie switches to `SameSite=None; Secure` automatically when a cros
 
 If the app and API sit behind one origin through a proxy, set `COVENANT_SAME_ORIGIN=true` to keep the stricter cookie.
 
-Set `APP_URL` at the top of the script block in `site/index.html` to surface a link to the deployed app. Left empty, the button is not rendered.
+`APP_URL` at the top of the script block in `site/index.html` points at the app. It is `/app`, matching the assembled layout. Set it to `""` to hide the button; a landing page should show no link rather than a dead one.
+
+### Vercel
+
+`vercel.json` sets the build command and output directory, and rewrites unmatched `/app/*` paths to the app's entry point. Set `VITE_API_BASE` as a build environment variable, pointing at the deployed API, or the app will request `/api` from its own origin and find nothing there.
 
 ### Railway
 

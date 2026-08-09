@@ -490,16 +490,17 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
 
 <script>
 /**
- * Where the deployed operator app lives. Set this to its URL to surface the link.
+ * Where the operator app lives.
  *
- * Left empty, the button is not rendered at all. A landing page whose call to action is a dead link
- * is worse than one without the button, and an unset value is exactly when that happens.
+ * A relative path, because the landing page and the app deploy together to one host: this file at
+ * the root, the app bundle under /app. Set to "" to hide the button, which is what a landing page
+ * should do rather than offer a dead link.
  *
- * The app is a static bundle; it talks to the write API, which needs a persistent process rather
- * than serverless functions. See the deployment section of the README before pointing this at
- * anything.
+ * Being same-origin with the app changes nothing about the app's own connection to the write API,
+ * which runs on a host that can keep a process alive and is cross-origin either way. See the
+ * deployment section of the README.
  */
-const APP_URL = "";
+const APP_URL = "/app";
 
 if (APP_URL) {
   document.getElementById("cta").insertAdjacentHTML(
