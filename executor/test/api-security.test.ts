@@ -5,8 +5,9 @@ import {
   verifyToken,
   safeEqual,
 } from "../src/api/session.js";
-import { parseCookies, serializeCookie, RateLimiter } from "../src/api/http.js";
+import { parseCookies, serializeCookie, RateLimiter, TtlCache } from "../src/api/http.js";
 import { loadApiConfig, ApiConfigError } from "../src/api/apiConfig.js";
+import { isVaultLabel, VAULT_LABELS, PRIMARY_VAULT_LABEL } from "../src/api/vaults.js";
 
 describe("operator secret check", () => {
   it("matches the correct secret and rejects a wrong one", () => {
@@ -97,6 +98,63 @@ describe("rate limiter", () => {
     expect(rl.allow("b", 0)).toBe(true);
     expect(rl.allow("a", 0)).toBe(false);
   });
+
+  /** Keys are caller-supplied IPs. Without a sweep the map only ever grows. */
+  it("drops expired windows instead of holding every key it has ever seen", () => {
+    const rl = new RateLimiter(5, 1_000);
+    for (let i = 0; i < 50; i++) rl.allow(`ip-${i}`, 0);
+    expect(rl.size).toBe(50);
+
+    rl.allow("ip-fresh", 5_000); // a later call sweeps the expired windows
+    expect(rl.size).toBe(1);
+  });
+});
+
+describe("ttl cache", () => {
+  it("returns a value inside its ttl and forgets it after", () => {
+    const c = new TtlCache<string>(1_000, 10);
+    c.set("k", "v", 0);
+    expect(c.get("k", 500)).toBe("v");
+    expect(c.get("k", 1_500)).toBeUndefined();
+  });
+
+  /** The idempotency keys arrive in a request header, so the ceiling is the real protection. */
+  it("evicts oldest first once past its ceiling", () => {
+    const c = new TtlCache<number>(60_000, 3);
+    c.set("a", 1, 0);
+    c.set("b", 2, 1);
+    c.set("c", 3, 2);
+    c.set("d", 4, 3);
+
+    expect(c.size).toBe(3);
+    expect(c.get("a", 4)).toBeUndefined(); // the oldest went
+    expect(c.get("d", 4)).toBe(4);
+  });
+
+  it("drops a key on demand, so a failed write stays retryable", () => {
+    const c = new TtlCache<string>(60_000, 10);
+    c.set("k", "v", 0);
+    c.delete("k");
+    expect(c.get("k", 1)).toBeUndefined();
+  });
+});
+
+/**
+ * A policy id is only unique per deployment: the vault is half of a policy's identity, which is why
+ * writes carry it.
+ */
+describe("vault registry", () => {
+  it("recognises exactly the configured labels", () => {
+    for (const label of VAULT_LABELS) expect(isVaultLabel(label)).toBe(true);
+    expect(isVaultLabel("v9")).toBe(false);
+    expect(isVaultLabel("")).toBe(false);
+    expect(isVaultLabel(undefined)).toBe(false);
+    expect(isVaultLabel(3)).toBe(false);
+  });
+
+  it("names a primary that is one of the known labels", () => {
+    expect(VAULT_LABELS).toContain(PRIMARY_VAULT_LABEL);
+  });
 });
 
 describe("api boot-safety", () => {
@@ -121,5 +179,50 @@ describe("api boot-safety", () => {
     expect(cfg.devMode).toBe(true);
     expect(cfg.secureCookies).toBe(false);
     expect(cfg.corsOrigin).toBe("http://localhost:5173");
+  });
+});
+
+/**
+ * Split deployment: a static app bundle on one host, the write API on a host that can run a
+ * persistent process. Two settings have to move together or sign-in silently breaks.
+ */
+describe("split deployment cookie policy", () => {
+  const deployed = { OPERATOR_SECRET: "s", COVENANT_CORS_ORIGIN: "https://app.example" };
+
+  it("relaxes SameSite so the session survives a cross-origin request", () => {
+    const cfg = loadApiConfig(deployed);
+    // SameSite=Strict is never sent cross-site, so every write would 401 with no clue why.
+    expect(cfg.crossOrigin).toBe(true);
+    expect(cfg.sameSite).toBe("None");
+    expect(cfg.secureCookies).toBe(true); // mandatory alongside None
+  });
+
+  it("keeps the strict cookie when the app and API share an origin", () => {
+    const cfg = loadApiConfig({ ...deployed, COVENANT_SAME_ORIGIN: "true" });
+    expect(cfg.crossOrigin).toBe(false);
+    expect(cfg.sameSite).toBe("Strict");
+  });
+
+  it("keeps the strict cookie in local dev", () => {
+    const cfg = loadApiConfig({ COVENANT_ENV: "dev" });
+    expect(cfg.crossOrigin).toBe(false);
+    expect(cfg.sameSite).toBe("Strict");
+  });
+
+  it("never emits SameSite=None without Secure, which browsers reject", () => {
+    for (const env of [deployed, { ...deployed, COVENANT_SAME_ORIGIN: "true" }, { COVENANT_ENV: "dev" }]) {
+      const cfg = loadApiConfig(env);
+      if (cfg.sameSite === "None") expect(cfg.secureCookies).toBe(true);
+    }
+  });
+
+  it("serializes the relaxed cookie correctly", () => {
+    const cfg = loadApiConfig(deployed);
+    const cookie = serializeCookie("cov_session", "tok", {
+      httpOnly: true, sameSite: cfg.sameSite, secure: cfg.secureCookies, maxAgeSeconds: 60,
+    });
+    expect(cookie).toContain("SameSite=None");
+    expect(cookie).toContain("Secure");
+    expect(cookie).toContain("HttpOnly");
   });
 });

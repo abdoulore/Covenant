@@ -20,9 +20,12 @@ export function PolicyDetail({
 
   const p = policy;
   const terminal = p.status === "Executed" || p.status === "Cancelled";
+  const pull = p.conditionType === "OraclePull";
   const canFund = !terminal;
   const canApprove = p.conditionType === "Approval" && p.status === "Pending";
-  const canRelease = p.effectiveStatus === "Releasable" && !p.recurring;
+  // A pull-oracle policy has no condition readable from stored state, so it never shows as
+  // Releasable. It is always offered, and the chain decides when the proof is submitted.
+  const canRelease = !p.recurring && (pull ? p.status === "Pending" : p.effectiveStatus === "Releasable");
 
   async function run(action: string, fn: () => Promise<WriteResult>) {
     if (!signedIn) { onRequireLogin(); return; }
@@ -58,6 +61,8 @@ export function PolicyDetail({
           {p.conditionType === "Approval" && <KV k="Approvals" v={`${p.approvalCount} of ${p.threshold}`} />}
           {p.conditionType === "Attestation" && <KV k="Attester" v={`${shortAddr(p.attester)}, ${p.attested ? "signed" : "awaiting"}`} />}
           {p.conditionType === "Oracle" && <KV k="Rule" v={`USDC/USD ${p.comparator === "Lte" ? "≤" : "≥"} ${(Number(p.oracleThreshold) / 1e8).toFixed(3)}`} />}
+          {pull && <KV k="Rule" v={`USDC/USD ${p.comparator === "Lte" ? "≤" : "≥"} ${(Number(p.oracleThreshold) / 1e18).toFixed(3)}`} />}
+          {pull && <KV k="Confidence" v={p.maxConfBps ? `reject above ${(p.maxConfBps / 100).toFixed(2)}%` : "not enforced"} />}
         </div>
 
         {notice && (
@@ -79,7 +84,7 @@ export function PolicyDetail({
                   <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.50" />
                 </label>
                 <button className="btn" style={{ marginBottom: 10 }} disabled={busy != null || !fundBase}
-                  onClick={() => run("Fund", () => api.fund(p.id, fundBase!))}>
+                  onClick={() => run("Fund", () => api.fund(p.vault, p.id, fundBase!))}>
                   {busy === "Fund" ? "Funding…" : "Fund"}
                 </button>
               </div>
@@ -87,13 +92,14 @@ export function PolicyDetail({
             <div className="row" style={{ marginTop: 6 }}>
               {canApprove && (
                 <button className="btn ghost" disabled={busy != null}
-                  onClick={() => run("Approve", () => api.approve(p.id))}>
+                  onClick={() => run("Approve", () => api.approve(p.vault, p.id))}>
                   {busy === "Approve" ? "Approving…" : "Approve"}
                 </button>
               )}
               {canRelease && (
                 <button className="btn" disabled={busy != null}
-                  onClick={() => run("Release", () => api.release(p.id))}>
+                  onClick={() => run("Release", () =>
+                    pull ? api.releaseWithProof(p.vault, p.id) : api.release(p.vault, p.id))}>
                   {busy === "Release" ? "Releasing…" : "Release"}
                 </button>
               )}

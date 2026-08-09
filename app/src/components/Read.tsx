@@ -4,7 +4,8 @@ import { agoUnix, ARC_DOMAIN, relUnix, shortAddr, shortHash, usdc } from "../lib
 import { Icon } from "./Icon";
 
 const CONDITION_ICON: Record<string, string> = {
-  Timelock: "clock", Approval: "check", Attestation: "shield", Oracle: "activity", Recurring: "repeat", Sweep: "swap",
+  Timelock: "clock", Approval: "check", Attestation: "shield", Oracle: "activity", OraclePull: "activity",
+  Schedule: "repeat", Recurring: "repeat", Sweep: "swap",
 };
 
 export function DepegPanel({ o }: { o: Oracle | null }) {
@@ -65,7 +66,13 @@ function detail(p: Policy) {
     case "Timelock": return <>releases <span className="num">{relUnix(p.releaseTime)}</span></>;
     case "Approval": return <><span className="num">{p.approvalCount}</span> of <span className="num">{p.threshold}</span> approvals</>;
     case "Attestation": return <>attester <span className="mono">{shortAddr(p.attester)}</span>, {p.attested ? "signed" : "awaiting signature"}</>;
+    // The threshold's scale depends on the path: the feed's own decimals for a pushed Oracle feed,
+    // and 1e18 for OraclePull, because the adapter normalizes before the vault compares.
     case "Oracle": return <>USDC/USD {p.comparator === "Lte" ? "≤" : "≥"} <span className="num">{(Number(p.oracleThreshold) / 1e8).toFixed(3)}</span></>;
+    case "OraclePull": return (
+      <>USDC/USD {p.comparator === "Lte" ? "≤" : "≥"} <span className="num">{(Number(p.oracleThreshold) / 1e18).toFixed(3)}</span>
+        {p.maxConfBps ? <>, conf ≤ <span className="num">{(p.maxConfBps / 100).toFixed(2)}%</span></> : null}</>
+    );
     case "Recurring": return <><span className="num">{usdc(p.amountPerPeriod)}</span> every <span className="num">{p.interval}</span>s, <span className="num">{p.periodsReleased}</span>{p.periods ? ` of ${p.periods}` : ""} released</>;
     case "Sweep": return <>sweep above <span className="num">{usdc(p.buffer)}</span>, min <span className="num">{usdc(p.minSweep)}</span></>;
     default: return null;

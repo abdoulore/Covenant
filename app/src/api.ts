@@ -6,12 +6,16 @@
 
 export interface Policy {
   vault: string; address: string; id: string;
+  /** False for a superseded deployment: it is shown, but nothing can be done to it. */
+  writable?: boolean;
   recipient: string; amount: string; funded: string;
   payoutCurrency: string; destinationDomain: number;
   conditionType: string; status: string; effectiveStatus: string;
   releaseTime?: string; threshold?: number; approvalCount?: number;
   attester?: string; attested?: boolean;
+  /** oracleThreshold is in the FEED's decimals for Oracle, and 1e18 for OraclePull. Branch on conditionType. */
   feed?: string; comparator?: string; oracleThreshold?: string; maxStaleSeconds?: string;
+  adapter?: string; feedId?: string; maxConfBps?: number;
   recurring?: boolean; isSweep?: boolean;
   amountPerPeriod?: string; buffer?: string; minSweep?: string;
   interval?: string; nextDue?: string; maxCatchUp?: string; periods?: number; periodsReleased?: number;
@@ -30,7 +34,7 @@ export interface Oracle { pair: string; price: number; conf: number; publishTime
 
 export interface AppState {
   generatedAt: string;
-  vaults: { label: string; address: string }[];
+  vaults: { label: string; address: string; writable?: boolean; note?: string }[];
   policies: Policy[];
   settlements: Settlement[];
   oracle: Oracle | null;
@@ -45,8 +49,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Where the API lives.
+ *
+ * Empty by default, which makes every request same-origin (`/api/...`). That is what the Vite dev
+ * proxy serves and what a single-origin deployment wants.
+ *
+ * Set VITE_API_BASE to an absolute origin when the app and the API are deployed separately, for
+ * example a static bundle on one host and the write API on a host that can run a persistent
+ * process. The API must then pin COVENANT_CORS_ORIGIN to this app's origin, or the browser will
+ * refuse the credentialed request.
+ */
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, { credentials: "include", ...init });
+  const res = await fetch(`${API_BASE}/api${path}`, { credentials: "include", ...init });
   const text = await res.text();
   const body = text ? JSON.parse(text) : {};
   if (!res.ok) {
@@ -89,6 +106,16 @@ export const api = {
     feedKey: "USDC/USD"; comparator: "Gte" | "Lte"; threshold: string; maxStaleSeconds: number;
   }) => write<WriteResult>("/policies", { type: "oracle", ...p }),
 
+  /**
+   * The pull-oracle path, and the default for new oracle policies. Verifies a signed price and
+   * releases in one transaction, and can reject a price the oracle itself is unsure about.
+   * `threshold1e18` is in 1e18 scale, not the feed's decimals: the adapter normalizes.
+   */
+  createOraclePull: (p: {
+    recipient: string; amount: string; payoutCurrency: string; destinationDomain: number;
+    feedKey: "USDC/USD"; comparator: "Gte" | "Lte"; threshold1e18: string; maxStaleSeconds: number; maxConfBps: number;
+  }) => write<WriteResult>("/policies", { type: "oraclePull", ...p }),
+
   createRecurring: (p: {
     recipient: string; payoutCurrency: string; destinationDomain: number;
     amountPerPeriod: string; interval: number; startTime: number; periods: number; maxCatchUp: number;
@@ -99,7 +126,19 @@ export const api = {
     buffer: string; minSweep: string; interval: number; startTime: number; maxCatchUp: number;
   }) => write<WriteResult>("/policies", { type: "sweep", ...p }),
 
-  fund: (policyId: string, amount: string) => write<WriteResult>(`/policies/${policyId}/fund`, { amount }),
-  approve: (policyId: string) => write<WriteResult>(`/policies/${policyId}/approve`),
-  release: (policyId: string) => write<WriteResult>(`/policies/${policyId}/release`),
+  /**
+   * Lifecycle actions carry the vault the policy actually lives on.
+   *
+   * Policy ids restart at zero on each PolicyVault deployment and the app shows policies from all
+   * of them, so `id` alone does not identify a policy. Pass `policy.vault` straight through from
+   * whatever row or detail view the operator acted on: it is the one value that makes the write
+   * land where the screen said it would.
+   */
+  fund: (vault: string, policyId: string, amount: string) =>
+    write<WriteResult>(`/policies/${vault}/${policyId}/fund`, { amount }),
+  approve: (vault: string, policyId: string) => write<WriteResult>(`/policies/${vault}/${policyId}/approve`),
+  release: (vault: string, policyId: string) => write<WriteResult>(`/policies/${vault}/${policyId}/release`),
+  /** OraclePull policies release only through here: the API fetches the signed price and pays the fee. */
+  releaseWithProof: (vault: string, policyId: string) =>
+    write<WriteResult>(`/policies/${vault}/${policyId}/releaseWithProof`),
 };
