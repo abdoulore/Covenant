@@ -160,7 +160,11 @@ If the app and API sit behind one origin through a proxy, set `COVENANT_SAME_ORI
 
 ### Vercel
 
-`vercel.json` sets the build command and output directory, and rewrites unmatched `/app/*` paths to the app's entry point. Set `VITE_API_BASE` as a build environment variable, pointing at the deployed API, or the app will request `/api` from its own origin and find nothing there.
+`vercel.json` sets the build command and output directory. Keep the project's root directory at the repository root: the config and the assembly step both live there, and neither `site/` nor `app/` can produce the combined output on its own. Leave the build and output fields blank in the dashboard, since the file already sets them.
+
+The one rewrite sends unmatched `/app/*` paths to the app's entry point. The app is a single page with no server routes, and static files under `/app` are served directly, so only paths with no file behind them fall through. Vercel's schema rejects unknown keys in that object, so the explanation lives here rather than beside it.
+
+Set `VITE_API_BASE` as a build environment variable pointing at the deployed API, with no trailing slash, or the app will request `/api` from its own origin and find nothing there. It is baked into the bundle at build time, so changing it needs a redeploy.
 
 ### Railway
 
