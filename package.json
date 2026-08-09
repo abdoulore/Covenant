@@ -30,14 +30,14 @@
     "demo:sweep": "npm exec --workspace executor -- tsx --env-file=../.env scripts/sweep-demo.ts",
     "gateway:authorize": "npm exec --workspace executor -- tsx --env-file=../.env scripts/gateway-authorize-delegate.ts",
     "demo:gateway": "npm exec --workspace executor -- tsx --env-file=../.env scripts/demo-gateway-funding.ts",
-    "dashboard": "npm exec --workspace executor -- tsx --env-file=../.env src/dashboard/server.ts",
-    "api": "npm exec --workspace executor -- tsx --env-file=../.env src/api/start.ts",
+    "dashboard": "npm exec --workspace executor -- tsx --env-file-if-exists=../.env src/dashboard/server.ts",
+    "api": "npm exec --workspace executor -- tsx --env-file-if-exists=../.env src/api/start.ts",
     "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts",
     "v4:preflight": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-preflight.ts",
     "v4:inventory": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-inventory.ts",
     "v4:cancel": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-cancel.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.18"
   }
 }
