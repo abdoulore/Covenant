@@ -12,6 +12,15 @@ import { Icon } from "./components/Icon";
 type Tab = "overview" | "policies" | "approvals" | "settlements" | "system";
 type Modal = null | "login" | "create";
 
+/**
+ * Where the landing page lives, and the mirror of the landing page's own APP_URL.
+ *
+ * Root-relative, because the two deploy together to one host: the page at the root, this bundle
+ * under /app. The dev server serves only the app, so following it locally just reloads the app —
+ * the honest path in production beats a guess that is right in neither place.
+ */
+const LANDING_URL = "/";
+
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "overview", icon: "grid", label: "Overview" },
   { id: "policies", icon: "lock", label: "Policies" },
@@ -43,6 +52,25 @@ export function App() {
     return () => clearInterval(t);
   }, [load]);
 
+  /**
+   * Recover the session across a reload.
+   *
+   * `signedIn` is component state and the session itself is an HttpOnly cookie, so on a fresh mount
+   * the app knows nothing about a session the browser is still holding perfectly well. Left alone
+   * it renders "read only", hides every action, and asks an already-signed-in operator to sign in
+   * again. Asked once here; login and sign-out set the flag directly from their own outcome.
+   *
+   * A failure leaves it false, which is the safe way to be wrong: the actions stay hidden and the
+   * API refuses the write anyway. The unreachable-API case is already reported by the state load.
+   */
+  useEffect(() => {
+    let live = true;
+    api.session()
+      .then(({ signedIn }) => { if (live) setSignedIn(signedIn); })
+      .catch(() => { /* stays signed out */ });
+    return () => { live = false; };
+  }, []);
+
   const requireOperator = () => (signedIn ? setModal("create") : setModal("login"));
 
   async function signOut() {
@@ -53,7 +81,9 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand"><span className="accent">Covenant</span><span className="sub">treasury operator</span></div>
+        <a className="brand" href={LANDING_URL} aria-label="Covenant home">
+          <span className="accent">Covenant</span><span className="sub">treasury operator</span>
+        </a>
         <nav className="nav">
           {TABS.map((t) => (
             <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>

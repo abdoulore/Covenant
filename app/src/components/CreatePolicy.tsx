@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { api, ApiError, type WriteResult } from "../api";
-import { toBaseUnits, usdc } from "../lib";
+import { localStamp, localZone, toBaseUnits, usdc, utcStamp } from "../lib";
 
 type Kind = "timelock" | "approval" | "attestation" | "oraclePull" | "recurring" | "sweep";
 type Step = "form" | "review" | "result";
@@ -74,6 +74,16 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
   const perBase = useMemo(() => toBaseUnits(amountPerPeriod), [amountPerPeriod]);
   const bufBase = useMemo(() => bufferBase(buffer), [buffer]);
   const minBase = useMemo(() => toBaseUnits(minSweep), [minSweep]);
+  /**
+   * The single instant this policy pins, if it pins one.
+   *
+   * Both times above come from a `datetime-local` input, which has no timezone in it: the browser
+   * reads them as the operator's own wall clock, and the vault stores the instant that resolves to.
+   * The review shows it both ways rather than making the operator do that conversion in their head.
+   */
+  const pinnedUnix = kind === "timelock" ? releaseUnix
+    : kind === "recurring" || kind === "sweep" ? startUnix
+    : NaN;
   const validPrice = /^\d+(\.\d{1,8})?$/.test(thresholdPrice.trim());
   // The threshold is compared in 1e18, because the adapter normalizes every oracle to one scale.
   // Built from the 8 decimal integer via BigInt, not a float: 0.995 * 1e18 in double precision is
@@ -137,7 +147,7 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="close" onClick={onClose} aria-label="Close">Ã—</button>
+        <button className="close" onClick={onClose} aria-label="Close">×</button>
 
         {step === "form" && (
           <>
@@ -174,7 +184,7 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
             {kind === "timelock" && (
               <label className="field"><span className="lab">Release time</span>
                 <input type="datetime-local" value={releaseAt} onChange={(e) => setReleaseAt(e.target.value)} />
-                <div className="hint">Releasable only at or after this time.</div></label>
+                <TimeHint unix={releaseUnix} lead="Releasable only at or after this time." /></label>
             )}
 
             {kind === "approval" && (
@@ -262,7 +272,7 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
                   <div className="row" style={{ marginTop: 8 }}>
                     <label className="field" style={{ flex: 1 }}><span className="lab">First period at</span>
                       <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-                      <div className="hint">Defaults to now.</div></label>
+                      <TimeHint unix={startAt ? startUnix : NaN} lead="Defaults to now." /></label>
                     <label className="field" style={{ width: 190 }}><span className="lab">Max catch-up (seconds)</span>
                       <input inputMode="numeric" value={maxCatchUp} onChange={(e) => setMaxCatchUp(Number(e.target.value) || 0)} />
                       <div className="hint">Overdue beyond this holds for owner approval.</div></label>
@@ -288,7 +298,7 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
               <KV k="Recipient" v={recipient} />
               {HAS_AMOUNT.has(kind) && <KV k="Amount" v={usdc(base)} />}
               <KV k="Payout" v={`${currency} · ${DEST.find((d) => d.domain === destination)?.name ?? destination}`} />
-              {kind === "timelock" && <KV k="Releasable at" v={new Date(releaseUnix * 1000).toLocaleString()} />}
+              {kind === "timelock" && <KV k="Releasable at" v={localStamp(releaseUnix)} />}
               {kind === "approval" && <KV k="Approvals" v={`${threshold} of ${approvers.length}`} />}
               {kind === "attestation" && <KV k="Attester" v={attester} />}
               {IS_ORACLE(kind) && <KV k="Rule" v={`USDC/USD ${comparator === "Gte" ? "≥" : "≤"} ${thresholdPrice}, stale > ${maxStale}s fails closed`} />}
@@ -297,6 +307,8 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
               )}
               {kind === "recurring" && <KV k="Schedule" v={`${usdc(perBase)} every ${interval}s, ${periods ? `${periods} periods` : "open-ended"}`} />}
               {kind === "sweep" && <KV k="Sweep" v={`keep ${usdc(bufBase)}, min ${usdc(minBase)}, every ${interval}s`} />}
+              {(kind === "recurring" || kind === "sweep") && <KV k="First period at" v={localStamp(startUnix)} />}
+              {Number.isFinite(pinnedUnix) && <KV k="Stored on chain as" v={utcStamp(pinnedUnix)} />}
             </div>
             {err && <div className="notice err">{err.message}{err.reason && <div className="reason">{err.reason}</div>}</div>}
             <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
@@ -327,5 +339,23 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
 
 function KV({ k, v }: { k: string; v: string }) {
   return <div className="kv"><span className="k">{k}</span><span className="v">{v}</span></div>;
+}
+
+/**
+ * Says which clock a `datetime-local` field was read on, and what the vault will hold instead.
+ *
+ * The input has no timezone in it, so the same typed string is a different instant for two
+ * operators in different places, and the contract only ever sees the instant. Naming the zone is
+ * what turns "14:30" from an assumption into a statement; echoing the UTC is what lets an operator
+ * catch an off-by-an-offset before signing rather than when the release fires an hour early.
+ */
+function TimeHint({ unix, lead }: { unix: number; lead: string }) {
+  const pinned = Number.isFinite(unix);
+  return (
+    <div className="hint">
+      {lead} Read on your own clock, {localZone(pinned ? new Date(unix * 1000) : undefined)}.
+      {pinned && <> Stored as <span className="mono">{utcStamp(unix)}</span>.</>}
+    </div>
+  );
 }
 

@@ -124,6 +124,56 @@ describe("session", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toMatch(/HttpOnly/);
   });
+
+  /**
+   * The cookie is HttpOnly, so the app cannot read it and has no way to know it is still signed in
+   * after a reload. GET answers exactly that, and nothing else.
+   */
+  describe("GET reports whether the cookie is still good", () => {
+    const askWith = (headers: Record<string, string> = {}) => fetch(`${base}/api/session`, { headers });
+
+    it("reports signed out when no cookie is sent", async () => {
+      const res = await askWith();
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ signedIn: false });
+    });
+
+    it("reports signed in for a live session cookie", async () => {
+      const res = await askWith({ cookie });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ signedIn: true });
+    });
+
+    /** The same verification the write routes use, so it cannot report a session they would refuse. */
+    it("reports signed out for a forged cookie", async () => {
+      const [payload] = cookie.replace("cov_session=", "").split(".");
+      const res = await askWith({ cookie: `cov_session=${payload}.deadbeef` });
+      expect(await res.json()).toEqual({ signedIn: false });
+    });
+
+    /** It answers about a cookie; it must never be a way to obtain one. */
+    it("never issues a session of its own", async () => {
+      expect((await askWith()).headers.get("set-cookie")).toBeNull();
+      expect((await askWith({ cookie })).headers.get("set-cookie")).toBeNull();
+    });
+
+    it("costs no chain read", async () => {
+      let readStateCalls = 0;
+      const probe = createApiServer({
+        config: loadApiConfig({ COVENANT_ENV: "dev", OPERATOR_SECRET: SECRET }),
+        readState: async () => { readStateCalls++; return {}; },
+        getService: async () => { throw new Error("a session check must not resolve the write service"); },
+      });
+      await new Promise<void>((r) => probe.listen(0, r));
+      const { port } = probe.address() as AddressInfo;
+
+      const res = await fetch(`http://127.0.0.1:${port}/api/session`);
+      expect(res.status).toBe(200);
+      expect(readStateCalls).toBe(0);
+
+      await new Promise<void>((r) => probe.close(() => r()));
+    });
+  });
 });
 
 describe("write gating", () => {
