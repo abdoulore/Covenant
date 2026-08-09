@@ -146,7 +146,6 @@ export function App() {
         {state && <>Reading {state.vaults.map((v) => v.label).join(" and ")} · updated {agoIso(state.generatedAt)} · testnet only</>}
       </footer>
 
-      {modal === "login" && <Login onClose={() => setModal(null)} onDone={() => setSignedIn(true)} />}
       {modal === "create" && <CreatePolicy onClose={() => setModal(null)} onCreated={load} oraclePrice={state?.oracle?.price ?? null} />}
       {selected && (
         <PolicyDetail
@@ -157,6 +156,10 @@ export function App() {
           onRequireLogin={() => setModal("login")}
         />
       )}
+
+      {/* Last, and on its own layer. Sign-in is raised from inside the policy detail, so it has to
+          paint over it; the .interrupt class is what guarantees that, and this order agrees. */}
+      {modal === "login" && <Login onClose={() => setModal(null)} onDone={() => setSignedIn(true)} />}
     </div>
   );
 }

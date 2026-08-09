@@ -138,6 +138,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--l
 
 /* modal for login and create */
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 40; }
+/* A modal that interrupts another modal. Sign-in is raised by an action taken inside the policy
+   detail, and every .modal-bg otherwise shares one z-index, so without this it lands underneath
+   whichever modal asked for it and reads as a dead button. */
+.modal-bg.interrupt { z-index: 50; }
 .modal { background: linear-gradient(168deg, var(--panel2), var(--panel-soft)); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 26px; width: 100%; max-width: 520px; box-shadow: var(--shadow); }
 .modal h3 { margin: 0 0 4px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .modal .close { float: right; background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px; display: inline-flex; }

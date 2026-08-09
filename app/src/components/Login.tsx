@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { api, ApiError } from "../api";
 
-/** Operator login. Exchanges the operator secret for a session cookie; the secret never persists. */
+/**
+ * Operator login. Exchanges the operator secret for a session cookie; the secret never persists.
+ *
+ * Always the interrupting layer: it is usually raised from inside another modal, by an operator who
+ * clicked an action they turn out not to be signed in for. It has to appear over whatever asked.
+ */
 export function Login({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,7 +29,7 @@ export function Login({ onClose, onDone }: { onClose: () => void; onDone: () => 
   }
 
   return (
-    <div className="modal-bg" onClick={onClose}>
+    <div className="modal-bg interrupt" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close">×</button>
         <h3>Operator sign in</h3>
