@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Scheduling (Phase 2.3), proven onchain end to end on PolicyVault v3.
  *
  *   npm run demo:scheduling
@@ -25,6 +25,7 @@ import { createLegRunner } from "../src/legs/createLegRunner.js";
 import { toDecimalString } from "../src/legs/legs.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { ARC_DOMAIN, chainFor } from "../src/config.js";
+import { currentVaultAddress } from "../src/api/vaults.js";
 
 const require = createRequire(import.meta.url);
 const { initiateDeveloperControlledWalletsClient } = require("@circle-fin/developer-controlled-wallets");
@@ -38,7 +39,7 @@ const env = (n: string): string => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_V3_ADDRESS") as `0x${string}`;
+const VAULT = currentVaultAddress();
 const RPC = env("ARC_TESTNET_RPC_URL");
 const arc = chainFor(ARC_DOMAIN);
 const chain = { id: arc.chainId, name: arc.name, nativeCurrency: arc.nativeCurrency, rpcUrls: { default: { http: [RPC] } } };
@@ -214,3 +215,4 @@ main().catch((err) => {
   console.error("\nSCHEDULING DEMO FAILED:", err?.message ?? err);
   process.exit(1);
 });
+

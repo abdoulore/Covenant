@@ -348,33 +348,33 @@
     </div>
     <div class="receipt reveal">
       <div class="rhead">
-        <span class="who"><svg class="ic ic-lg"><use href="#i-receipt"/></svg> Cross-chain settlement <span class="dim">/ policy 2</span></span>
+        <span class="who"><svg class="ic ic-lg"><use href="#i-receipt"/></svg> Cross-chain settlement <span class="dim">/ policy 1 on v4</span></span>
         <span class="amt">0.5 USDC policy · Arc to Base Sepolia</span>
       </div>
       <div class="flow">
         <div class="stop">
           <div class="k">Funds left vault</div>
-          <div class="h"><a href="https://testnet.arcscan.app/tx/0xf2ef10c2dd7a15cd4f69e0cf6689e3eb175b632cafbae7b750f85c6131bcee59" target="_blank" rel="noopener">0xf2ef10c2…6131bcee59</a></div>
+          <div class="h"><a href="https://testnet.arcscan.app/tx/0x733842b8852df92c0b1e0eb4e6fc4d31be71cb84d55dd12cc9906ea68f39e086" target="_blank" rel="noopener">0x733842b8…a68f39e086</a></div>
           <div class="s">release on Arc, condition met</div>
         </div>
         <div class="mid">
           <div class="line"></div>
-          <div class="held">held 28.8s</div>
+          <div class="held">held 31.5s</div>
           <div class="tag">cross-chain · incl. bridge</div>
         </div>
         <div class="stop r">
           <div class="k">Recipient paid</div>
-          <div class="h"><a href="https://sepolia.basescan.org/tx/0x68263cfcf2f38df680b769a65697cab9b3677f3cabba1b21ae28f020253844fe" target="_blank" rel="noopener">0x68263cfc…0253844fe</a></div>
+          <div class="h"><a href="https://sepolia.basescan.org/tx/0xfbc2a1419cf614e12f66090afdaeaa3608abd252e09eced5b32f36122ad6d369" target="_blank" rel="noopener">0xfbc2a141…22ad6d369</a></div>
           <div class="s">CCTP mint, direct to recipient</div>
         </div>
       </div>
       <div class="rnotes">
-        <div><div class="k">Delivered</div><div class="v good">0.606602</div></div>
+        <div><div class="k">Delivered</div><div class="v good">0.607214</div></div>
         <div><div class="k">Policy amount</div><div class="v">0.500000</div></div>
         <div><div class="k">Recipient gas</div><div class="v">0 ETH</div></div>
-        <div><div class="k">Forwarder fee</div><div class="v">0.053301</div></div>
+        <div><div class="k">Forwarder fee</div><div class="v">0.053718</div></div>
       </div>
-      <p class="caption">The recipient received more than the policy amount, never less: the forwarder fee is deducted from the mint, so the executor grosses up the burn from its own balance. The fee is flat, 0.053301 USDC, a rounding error at treasury size. The custody window, the seconds the executor holds funds between release and payout, is timestamped on every settlement rather than glossed over.</p>
+      <p class="caption">The recipient received more than the policy amount, never less: the forwarder fee is deducted from the mint, so the executor grosses up the burn from its own balance. The fee was 0.053718 USDC against a 0.053644 quote, inside the allowance the executor sized in advance. The custody window, the seconds the executor holds funds between release and payout, is timestamped on every settlement rather than glossed over.</p>
     </div>
   </section>
 
@@ -430,18 +430,20 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
       <div class="tile timings">
         <div class="th"><svg class="ic ic-lg ti"><use href="#i-clock"/></svg><h3>Release to paid, in seconds</h3></div>
         <div class="tg">
-          <div><div class="tv">6.8<span class="u">s</span></div><div class="tk">attestation</div></div>
-          <div><div class="tv">9.0<span class="u">s</span></div><div class="tk">oracle depeg</div></div>
-          <div><div class="tv">16.6<span class="u">s</span></div><div class="tk">FX on Arc</div></div>
-          <div><div class="tv">28.8<span class="u">s</span></div><div class="tk">cross-chain</div></div>
-          <div><div class="tv">0.0592</div><div class="tk">USDC to deploy</div></div>
+          <div><div class="tv">3.7<span class="u">s</span></div><div class="tk">attestation</div></div>
+          <div><div class="tv">3.9<span class="u">s</span></div><div class="tk">oracle depeg</div></div>
+          <div><div class="tv">11.8<span class="u">s</span></div><div class="tk">FX on Arc</div></div>
+          <div><div class="tv">31.5<span class="u">s</span></div><div class="tk">cross-chain</div></div>
+          <div><div class="tv">0.0797</div><div class="tk">USDC to deploy v4</div></div>
         </div>
       </div>
     </div>
 
     <div class="addrs">
-      <div><div class="k">PolicyVault v2 · four conditions + oracle</div><div class="v"><a href="https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1" target="_blank" rel="noopener">0xB702404EA947aec698323Cd42989CA6168f209D1</a></div></div>
-      <div><div class="k">PolicyVault v3 · recurring + sweep</div><div class="v"><a href="https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300" target="_blank" rel="noopener">0xDC0040eB02c438D59838A6f178e38184eACf7300</a></div></div>
+      <div><div class="k">PolicyVault v4 · current, all six conditions</div><div class="v"><a href="https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498" target="_blank" rel="noopener">0x3b507607bA48A65587a9a6136c36cd2f1132d498</a></div></div>
+      <div><div class="k">PythAdapter · verifies the signed price</div><div class="v"><a href="https://testnet.arcscan.app/address/0x0A5fD210414e68a5C0690B890a165E35D4E6Acef" target="_blank" rel="noopener">0x0A5fD210414e68a5C0690B890a165E35D4E6Acef</a></div></div>
+      <div><div class="k">PolicyVault v3 · superseded, read-only</div><div class="v"><a href="https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300" target="_blank" rel="noopener">0xDC0040eB02c438D59838A6f178e38184eACf7300</a></div></div>
+      <div><div class="k">PolicyVault v2 · superseded, read-only</div><div class="v"><a href="https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1" target="_blank" rel="noopener">0xB702404EA947aec698323Cd42989CA6168f209D1</a></div></div>
     </div>
   </section>
 </div>
@@ -451,8 +453,8 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
   <div class="wrap reveal">
     <h2>Watch a condition release itself.</h2>
     <p>Every claim on this page links to a transaction on a public testnet explorer. Testnet only.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1" target="_blank" rel="noopener">See it onchain <svg class="ic"><use href="#i-arrow"/></svg></a>
+    <div class="cta" id="cta">
+      <a class="btn primary" href="https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498" target="_blank" rel="noopener">See it onchain <svg class="ic"><use href="#i-arrow"/></svg></a>
       <a class="btn ghost" href="https://github.com/abdoulore/Covenant" target="_blank" rel="noopener"><svg class="ic"><use href="#i-git"/></svg> View the source</a>
     </div>
   </div>
@@ -487,14 +489,38 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
 </footer>
 
 <script>
+/**
+ * Where the deployed operator app lives. Set this to its URL to surface the link.
+ *
+ * Left empty, the button is not rendered at all. A landing page whose call to action is a dead link
+ * is worse than one without the button, and an unset value is exactly when that happens.
+ *
+ * The app is a static bundle; it talks to the write API, which needs a persistent process rather
+ * than serverless functions. See the deployment section of the README before pointing this at
+ * anything.
+ */
+const APP_URL = "";
+
+if (APP_URL) {
+  document.getElementById("cta").insertAdjacentHTML(
+    "afterbegin",
+    `<a class="btn ghost" href="${APP_URL}" target="_blank" rel="noopener">Open the operator app <svg class="ic"><use href="#i-arrow"/></svg></a>`,
+  );
+}
+
 const ARC = "https://testnet.arcscan.app/tx/";
 const TYPES = [
-  { n: "01", ic: "i-clock", name: "Timelock", desc: "Releasable only after a timestamp.", short: "0x26e1acf0…6664019ee", tx: "0x26e1acf092070b3f3731662aeb2c549d0bff50daee3a102ad6cf3826664019ee", note: "refused early, status 0" },
-  { n: "02", ic: "i-check", name: "Approval", desc: "Releasable after N-of-M named approvers sign.", short: "0xd5a5008b…d4a08c27c9", tx: "0xd5a5008b280fcfbe8d2713fc0f4383eadbfadbc038cec4fe504e77d4a08c27c9", note: "release" },
-  { n: "03", ic: "i-shield", name: "Attestation", desc: "Releasable when a named attester signs an EIP-712 statement.", short: "0xaa1e518a…0d438e5659", tx: "0xaa1e518abc7cb2109b381f76735312ba92b63182a9d89d25a0460f0d438e5659", note: "attest, onchain" },
-  { n: "04", ic: "i-activity", name: "Oracle", desc: "Releasable when a price feed crosses a threshold.", short: "0x02173d2f…6ea1a3ff80d3", tx: "0x02173d2f68f74800ad3fe7132815d4b09a6bd0a9b5de0bfaf69e6ea1a3ff80d3", note: "release on live Pyth" },
-  { n: "05", ic: "i-repeat", name: "Recurring", desc: "A fixed slice each interval, each period settled on its own.", short: "0xab3ca192…3fc377d1b92", tx: "0xab3ca192218daa03580edfc56f82382eef7218e7433a84dda03d39fc377d1b92", note: "payroll period 1" },
-  { n: "06", ic: "i-swap", name: "Sweep", desc: "The balance above a buffer, on a schedule, with a dust floor.", short: "0x838728c3…4f6b85e4cb0", tx: "0x838728c357d6d431cde3ff8d25cd4bcee2bd8d7aedac9e0be7f984f6b85e4cb0", note: "sweep the excess" },
+  { n: "01", ic: "i-clock", name: "Timelock", desc: "Releasable only after a timestamp.", short: "0x74c46199…543cdb4f34b2", tx: "0x74c46199ea5456338f11c6a65aac99764970a52b801098464954543cdb4f34b2", note: "refused early, ConditionNotMet" },
+  { n: "02", ic: "i-check", name: "Approval", desc: "Releasable after N-of-M named approvers sign.", short: "0x888d1547…c470a368b4", tx: "0x888d154757d7f4c9470c6633f1277e97fc487c340a662dbbbb9ae6c470a368b4", note: "release" },
+  { n: "03", ic: "i-shield", name: "Attestation", desc: "Releasable when a named attester signs an EIP-712 statement.", short: "0xd992291f…3dba36b8db", tx: "0xd992291fc09093ddebf37eddf77e72d67d892c88b63dd7083a39a37dba36b8db", note: "attest, onchain" },
+  {
+    n: "04", ic: "i-activity", name: "Oracle",
+    desc: "Releasable when a price crosses a threshold. Two paths: a pushed feed, or a signed proof verified at release that also refuses a price the oracle is unsure of.",
+    short: "0xd3b61052…5115b06dc38", tx: "0xd3b61052075edc0dc7c898bab60fd41ee59368e6a4dd30b581a205115b06dc38",
+    note: "verified and released in one transaction",
+  },
+  { n: "05", ic: "i-repeat", name: "Recurring", desc: "A fixed slice each interval, each period settled on its own.", short: "0xec251b7d…c17b1ce7f3be", tx: "0xec251b7d328395069b759f44175b542da8d7af2830de0a87b9d3c17b1ce7f3be", note: "payroll period 1" },
+  { n: "06", ic: "i-swap", name: "Sweep", desc: "The balance above a buffer, on a schedule, with a dust floor.", short: "0x03e18c3e…f77fe7d87abb", tx: "0x03e18c3e0bd3ec0cedbae7a47fdb92ffab28518fcf75141ee1f6f77fe7d87abb", note: "sweep the excess" },
 ];
 document.getElementById("conds").innerHTML = TYPES.map((t) => `
   <a class="cond" href="${ARC}${t.tx}" target="_blank" rel="noopener">

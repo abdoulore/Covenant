@@ -6,7 +6,7 @@
  */
 import { join } from "node:path";
 import { loadApiConfig } from "./apiConfig.js";
-import { buildReadState, readModelFromOptions } from "./readModel.js";
+import { createCachedReadState, readModelFromOptions } from "./readModel.js";
 import { VaultService } from "./vaultService.js";
 import { createApiServer, type VaultServiceLike } from "./server.js";
 
@@ -14,10 +14,14 @@ const config = loadApiConfig(process.env);
 
 const readDeps = readModelFromOptions({
   rpcUrl: process.env.ARC_TESTNET_RPC_URL ?? "",
+  v4Address: process.env.POLICY_VAULT_V4_ADDRESS,
   v3Address: process.env.POLICY_VAULT_V3_ADDRESS,
   v2Address: process.env.POLICY_VAULT_ADDRESS,
   feedId: process.env.PYTH_USDC_USD_FEED_ID ?? "",
   stateDir: join(process.cwd(), ".state"),
+  // The operator app is an operational surface: it lists what can be acted on, plus the deployment
+  // being drained. v2 is history and lives in the monitor. See vaults.ts.
+  surface: "app",
 });
 
 // The write service is resolved lazily and once: a read-only or unconfigured run never needs Circle
@@ -27,7 +31,7 @@ const getService = () => (servicePromise ??= VaultService.fromEnv());
 
 const server = createApiServer({
   config,
-  readState: () => buildReadState(readDeps),
+  readState: createCachedReadState(readDeps),
   getService,
 });
 

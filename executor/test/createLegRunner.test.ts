@@ -10,6 +10,7 @@ const RECIPIENT = "0xrecipient";
 function policy(over: Partial<ReleasedPolicy> = {}): ReleasedPolicy {
   return {
     policyId: "1",
+    periodIndex: 0, // single-shot release; recurring policies number theirs from 1
     recipient: RECIPIENT,
     amount: "500000",
     payoutCurrency: "USDC",

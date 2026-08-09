@@ -128,7 +128,7 @@ export class GatewayFunder {
   }
 
   /** Fund an Arc address from the unified balance: top up if needed, then spend and mint on Arc. */
-  async fundArcAddress(amount: bigint, arcRecipient: `0x${string}`): Promise<{ mintTx: string; delivered: bigint; depositTx?: string }> {
+  async fundArcAddress(amount: bigint, arcRecipient: `0x${string}`): Promise<{ mintTx: string; delivered: bigint; depositTx?: string | undefined }> {
     const depositTx = await this.ensureUnifiedBalance(amount);
     const { mintTx, delivered } = await this.spendToArc(amount, arcRecipient);
     return { mintTx, delivered, depositTx };

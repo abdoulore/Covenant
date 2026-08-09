@@ -104,7 +104,7 @@ export class OracleKeeper {
   private readonly confirmations: bigint;
   private readonly pollIntervalMs: number;
   private readonly log: (message: string) => void;
-  private readonly pyth?: PythClient;
+  private readonly pyth?: PythClient | undefined;
   private stopped = false;
 
   constructor(opts: OracleKeeperOptions) {

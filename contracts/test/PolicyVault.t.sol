@@ -670,6 +670,113 @@ contract PolicyVaultTest is Test {
         assertEq(usdc.balanceOf(address(vault)), 0);
     }
 
+    /// @dev funded is the vault's record of what it holds for a policy. Release empties it, so a
+    ///      released policy must not still report a balance the vault has already paid out.
+    function test_Release_DrawsDownFunded() public {
+        uint64 deadline = uint64(block.timestamp + 1 days);
+        uint256 id = _createTimelock(10 * ONE_USDC, deadline);
+        _fund(id, 10 * ONE_USDC);
+        assertEq(vault.getPolicy(id).funded, 10 * ONE_USDC);
+
+        vm.warp(deadline);
+        vault.release(id);
+
+        assertEq(vault.getPolicy(id).funded, 0, "funded must not outlive the transfer");
+        assertEq(usdc.balanceOf(address(vault)), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Two-step ownership
+    // ---------------------------------------------------------------------
+
+    /// @dev The vault is immutable and only the owner can cancel or refund, so a one-step transfer
+    ///      to a mistyped address would strand every deposit. Ownership must not move on transfer
+    ///      alone.
+    function test_Ownership_DoesNotMoveUntilAccepted() public {
+        address newOwner = makeAddr("newOwner");
+
+        vm.prank(owner);
+        vault.transferOwnership(newOwner);
+
+        assertEq(vault.owner(), owner, "ownership moved on transfer alone");
+        assertEq(vault.pendingOwner(), newOwner);
+
+        // The old owner is still the only one who can act.
+        vm.prank(newOwner);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, newOwner));
+        vault.setExecutor(stranger);
+
+        vm.prank(newOwner);
+        vault.acceptOwnership();
+        assertEq(vault.owner(), newOwner);
+
+        vm.prank(newOwner);
+        vault.setExecutor(stranger);
+        assertEq(vault.executor(), stranger);
+    }
+
+    function test_RevertWhen_UnpendingAccountAcceptsOwnership() public {
+        vm.prank(owner);
+        vault.transferOwnership(makeAddr("newOwner"));
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger));
+        vault.acceptOwnership();
+    }
+
+    // ---------------------------------------------------------------------
+    // Approver set bounds
+    // ---------------------------------------------------------------------
+
+    function _distinctApprovers(uint256 n) internal pure returns (address[] memory a) {
+        a = new address[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            a[i] = address(uint160(i + 1));
+        }
+    }
+
+    /// @dev approvalCount is a uint8. Past 255 approvals it would wrap to zero and un-meet a
+    ///      condition that had already been satisfied, so the set is capped at creation.
+    function test_RevertWhen_ApproverSetExceedsCap() public {
+        vm.prank(owner);
+        vm.expectRevert(PolicyVault.InvalidApprovalConfig.selector);
+        vault.createPolicy(
+            recipient,
+            ONE_USDC,
+            PolicyVault.PayoutCurrency.USDC,
+            ARC_DOMAIN,
+            PolicyVault.ConditionType.Approval,
+            0,
+            _distinctApprovers(256),
+            1
+        );
+    }
+
+    function test_ApproverSetAtCapIsAccepted() public {
+        // Built before the prank: a view call here would consume it and send the create as the test.
+        address[] memory approvers = _distinctApprovers(vault.MAX_APPROVERS());
+
+        vm.prank(owner);
+        uint256 id = vault.createPolicy(
+            recipient,
+            ONE_USDC,
+            PolicyVault.PayoutCurrency.USDC,
+            ARC_DOMAIN,
+            PolicyVault.ConditionType.Approval,
+            0,
+            approvers,
+            255
+        );
+
+        // Every one of the 255 can approve, and the count reaches the threshold without wrapping.
+        for (uint256 i = 1; i <= 255; ++i) {
+            vm.prank(address(uint160(i)));
+            vault.approve(id);
+        }
+        assertEq(vault.getPolicy(id).approvalCount, 255);
+        assertTrue(vault.checkCondition(id));
+    }
+
     // ---------------------------------------------------------------------
     // Fuzz
     // ---------------------------------------------------------------------

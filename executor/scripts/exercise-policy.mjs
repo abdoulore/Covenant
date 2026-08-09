@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Exercise PolicyVault end to end on Arc testnet, including the failure path.
  *
  *   node --env-file=.env executor/scripts/exercise-policy.mjs
@@ -14,6 +14,7 @@
 import { createPublicClient, http, parseAbi } from "viem";
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 import { executeContract, executeContractExpectingRevert } from "./lib/circle-tx.mjs";
+import { currentVaultAddress } from "./lib/vault-address.mjs";
 
 const ConditionType = { Timelock: 0, Approval: 1 };
 const PayoutCurrency = { USDC: 0, EURC: 1 };
@@ -27,7 +28,7 @@ const env = (n) => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_ADDRESS");
+const VAULT = currentVaultAddress();
 const USDC = env("ARC_USDC_ADDRESS");
 const RPC = env("ARC_TESTNET_RPC_URL");
 const TREASURY_ID = env("TREASURY_WALLET_ID");
@@ -206,3 +207,4 @@ main().catch((err) => {
   if (err?.response?.data) console.error(JSON.stringify(err.response.data, null, 2));
   process.exit(1);
 });
+

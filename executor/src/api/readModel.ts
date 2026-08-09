@@ -13,8 +13,10 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createPublicClient, http, type PublicClient } from "viem";
 import { chainFor, ARC_DOMAIN } from "../config.js";
+import { labelsFor, VAULTS, type VaultLabel, type VaultSurface } from "./vaults.js";
 
-const CONDITION = ["Timelock", "Approval", "Attestation", "Oracle"];
+// Index is the onchain enum value. Append-only, so a v2 or v3 policy decodes the same here.
+const CONDITION = ["Timelock", "Approval", "Attestation", "Oracle", "Schedule", "OraclePull"];
 const STATUS = ["Pending", "Releasable", "Executed", "Cancelled"];
 const COMPARATOR = ["Gte", "Lte"];
 const CURRENCY = ["USDC", "EURC"];
@@ -35,6 +37,11 @@ const RECURRING = [
   { name: "nextDue", type: "uint64" }, { name: "maxCatchUp", type: "uint64" }, { name: "periods", type: "uint32" },
   { name: "periodsReleased", type: "uint32" },
 ] as const;
+// v4 appends the OraclePull fields. Three tuples now, one per deployment shape: reading a vault
+// with a longer tuple than it has over-reads and reverts.
+const ORACLE_PULL = [
+  { name: "adapter", type: "address" }, { name: "feedId", type: "bytes32" }, { name: "maxConfBps", type: "uint16" },
+] as const;
 
 const policyAbi = (components: readonly unknown[]) =>
   [
@@ -44,7 +51,8 @@ const policyAbi = (components: readonly unknown[]) =>
   ] as const;
 
 export interface VaultRef {
-  label: string;
+  /** Identifies the deployment. A policy id is only unique when paired with this. See vaults.ts. */
+  label: VaultLabel;
   address: `0x${string}`;
   abi: any;
 }
@@ -58,10 +66,16 @@ export interface ReadModelDeps {
 
 export interface ReadModelOptions {
   rpcUrl: string;
+  v4Address?: string | undefined;
   v3Address?: string | undefined;
   v2Address?: string | undefined;
   feedId: string;
   stateDir: string;
+  /**
+   * Which surface is asking. The monitor shows every deployment; the operator app shows only what
+   * an operator can act on plus the one it is draining. See vaults.ts.
+   */
+  surface?: VaultSurface;
 }
 
 const DEFAULT_FEED = "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
@@ -74,13 +88,39 @@ export function readModelFromOptions(opts: ReadModelOptions): ReadModelDeps {
     transport: http(opts.rpcUrl, { retryCount: 2, retryDelay: 1_500, timeout: 20_000 }),
   }) as PublicClient;
 
+  const listed = new Set(labelsFor(opts.surface ?? "monitor"));
   const vaults = [
+    { label: "v4", address: opts.v4Address, abi: policyAbi([...BASE, ...RECURRING, ...ORACLE_PULL]) },
     { label: "v3", address: opts.v3Address, abi: policyAbi([...BASE, ...RECURRING]) },
     { label: "v2", address: opts.v2Address, abi: policyAbi(BASE) },
-  ].filter((v) => v.address) as VaultRef[];
+  ].filter((v) => v.address && listed.has(v.label as VaultLabel)) as VaultRef[];
 
   return { client, vaults, feedId: opts.feedId || DEFAULT_FEED, stateDir: opts.stateDir };
 }
+
+/**
+ * Run `fn` over every item, at most `limit` at a time.
+ *
+ * The policy reads used to run strictly one id after another, so a vault holding N policies cost N
+ * sequential round trips on every single request. Bounded rather than unbounded because the other
+ * failure mode is just as real: firing hundreds of concurrent reads at the RPC endpoint gets the
+ * whole batch rate-limited.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index]!);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+const READ_CONCURRENCY = 8;
 
 async function readPolicies(deps: ReadModelDeps) {
   const out: any[] = [];
@@ -89,16 +129,21 @@ async function readPolicies(deps: ReadModelDeps) {
     try {
       next = (await deps.client.readContract({ address: vault.address, abi: vault.abi, functionName: "nextPolicyId" })) as bigint;
     } catch { continue; }
-    for (let id = 0n; id < next; id++) {
+
+    const ids = Array.from({ length: Number(next) }, (_, i) => BigInt(i));
+    const rows = await mapWithConcurrency(ids, READ_CONCURRENCY, async (id) => {
       try {
         const [p, effective] = await Promise.all([
           deps.client.readContract({ address: vault.address, abi: vault.abi, functionName: "getPolicy", args: [id] }) as Promise<any>,
           deps.client.readContract({ address: vault.address, abi: vault.abi, functionName: "statusOf", args: [id] }) as Promise<number>,
         ]);
-        out.push({
+        return {
           vault: vault.label, address: vault.address, id: id.toString(),
+          writable: VAULTS[vault.label].writable,
           recipient: p.recipient, amount: p.amount.toString(), funded: p.funded.toString(),
           payoutCurrency: CURRENCY[p.payoutCurrency], destinationDomain: p.destinationDomain,
+          // The recurring flag comes first because v3 stores conditionType 0 (Timelock) on its
+          // scheduled policies; only v4 records Schedule properly. Both must read correctly at once.
           conditionType: p.recurring ? (p.isSweep ? "Sweep" : "Recurring") : CONDITION[p.conditionType],
           status: STATUS[p.status], effectiveStatus: STATUS[effective],
           releaseTime: p.releaseTime?.toString(), threshold: p.threshold, approvalCount: p.approvalCount,
@@ -109,9 +154,16 @@ async function readPolicies(deps: ReadModelDeps) {
           amountPerPeriod: p.amountPerPeriod?.toString(), buffer: p.buffer?.toString(), minSweep: p.minSweep?.toString(),
           interval: p.interval?.toString(), nextDue: p.nextDue?.toString(), maxCatchUp: p.maxCatchUp?.toString(),
           periods: p.periods, periodsReleased: p.periodsReleased,
-        });
-      } catch { /* skip an unreadable policy rather than fail the whole scan */ }
-    }
+          // OraclePull (v4). oracleThreshold above is in the FEED's decimals for an Oracle policy
+          // and in 1e18 for an OraclePull one, so a reader must branch on conditionType to scale it.
+          adapter: p.adapter, feedId: p.feedId, maxConfBps: p.maxConfBps,
+        };
+      } catch {
+        return undefined; // skip an unreadable policy rather than fail the whole scan
+      }
+    });
+
+    for (const row of rows) if (row) out.push(row);
   }
   return out;
 }
@@ -162,7 +214,56 @@ export async function buildReadState(deps: ReadModelDeps) {
   const [policies, settlements, oracle] = await Promise.all([readPolicies(deps), readSettlements(deps), readOracle(deps)]);
   return {
     generatedAt: new Date().toISOString(),
-    vaults: deps.vaults.map((v) => ({ label: v.label, address: v.address })),
+    vaults: deps.vaults.map((v) => ({
+      label: v.label,
+      address: v.address,
+      writable: VAULTS[v.label].writable,
+      note: VAULTS[v.label].note,
+    })),
     policies, settlements, oracle,
   };
+}
+
+/** How long a built state is served before the chain is read again. */
+export const READ_STATE_TTL_MS = 3_000;
+
+/**
+ * Serve `load`'s result from a short cache, and share one in-flight call between concurrent callers.
+ *
+ * Both halves matter and they solve different problems. The cache stops repeat polls from costing a
+ * fresh pass; sharing the in-flight promise stops a burst of simultaneous first-callers from each
+ * starting their own, which is what a cache alone still allows.
+ */
+export function withTtlCache<T>(load: () => Promise<T>, ttlMs: number, now = () => Date.now()) {
+  let inflight: Promise<T> | undefined;
+  let cached: { at: number; value: T } | undefined;
+
+  return async function read(): Promise<T> {
+    if (cached && now() - cached.at < ttlMs) return cached.value;
+    if (inflight) return inflight;
+
+    inflight = load()
+      .then((value) => {
+        cached = { at: now(), value };
+        return value;
+      })
+      .finally(() => {
+        inflight = undefined;
+      });
+
+    return inflight;
+  };
+}
+
+/**
+ * Wrap buildReadState in a short cache shared by every caller.
+ *
+ * /api/state is public and unauthenticated, the app polls it every ten seconds, and one call costs
+ * a read per policy per vault plus an outbound Pyth fetch. Uncached, the RPC bill scales with the
+ * number of people who have the page open, and anyone at all can run it up on purpose.
+ *
+ * Three seconds is short enough that the operator still sees a write land on the next poll.
+ */
+export function createCachedReadState(deps: ReadModelDeps, ttlMs = READ_STATE_TTL_MS) {
+  return withTtlCache(() => buildReadState(deps), ttlMs);
 }

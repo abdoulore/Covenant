@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      # Public, keyless endpoints, the same ones .env.example documents. The checks below only read.
+      ARC_TESTNET_RPC_URL: https://arc-testnet.drpc.org
+      ARC_TESTNET_RPC_FALLBACK_URL: https://rpc.testnet.arc.network
+      BASE_SEPOLIA_RPC_URL: https://base-sepolia.drpc.org
+      BASE_SEPOLIA_RPC_FALLBACK_URL: https://sepolia.base.org
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive # OpenZeppelin, required before the contracts will build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      # Root plus the executor workspace.
+      - run: npm ci
+
+      # The app is a separate package with its own lockfile, deliberately outside the workspace so
+      # Vite's dependency tree is not hoisted against the executor's. `npm ci` at the root therefore
+      # does not install it, and the typecheck and build below both need it.
+      - name: Install app dependencies
+        run: npm --prefix app ci
+
+      - name: Contract suite
+        run: npm run test:contracts
+
+      - name: Executor suite
+        run: npm run test:executor
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The claims in the README are derived and checked, never asserted by hand.
+      - name: Test count matches the README
+        run: npm run test:count
+
+      # Every hash in the repo is a claim that a transaction happened. This resolves each one against
+      # the chain, so a fabricated or mistyped hash cannot survive to a merge.
+      - name: Asserted hashes resolve onchain
+        run: npm run verify:hashes
+
+      - name: App build and bundle secret check
+        run: npm --prefix app run build

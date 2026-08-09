@@ -15,21 +15,28 @@ export function Approvals({
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ id: string; kind: "ok" | "err"; text: string; url?: string } | null>(null);
 
+  // Read-only deployments are excluded: the queue is a work list, and nothing here can be actioned
+  // on a superseded vault.
   const pending = policies.filter(
-    (p) => p.conditionType === "Approval" && p.status === "Pending" && Number(p.approvalCount) < Number(p.threshold),
+    (p) => p.writable !== false && p.conditionType === "Approval" && p.status === "Pending"
+      && Number(p.approvalCount) < Number(p.threshold),
   );
+
+  /** Rows are identified by vault AND id: the same number exists on every deployment. */
+  const rowKey = (p: Policy) => `${p.vault}-${p.id}`;
 
   async function approve(p: Policy) {
     if (!signedIn) { onRequireLogin(); return; }
-    setBusy(p.id);
+    const key = rowKey(p);
+    setBusy(key);
     setNotice(null);
     try {
-      const r = await api.approve(p.id);
-      setNotice({ id: p.id, kind: "ok", text: "Approval sent.", url: r.explorerUrl });
+      const r = await api.approve(p.vault, p.id);
+      setNotice({ id: key, kind: "ok", text: "Approval sent.", url: r.explorerUrl });
       onChanged();
     } catch (e) {
       const msg = e instanceof ApiError ? (e.reason ?? e.message) : String((e as Error).message);
-      setNotice({ id: p.id, kind: "err", text: msg });
+      setNotice({ id: key, kind: "err", text: msg });
     } finally {
       setBusy(null);
     }
@@ -48,7 +55,7 @@ export function Approvals({
         <thead><tr><th>Vault</th><th>#</th><th>Recipient</th><th>Amount</th><th>Approvals</th><th className="r">Action</th></tr></thead>
         <tbody>
           {pending.map((p) => (
-            <tr key={`${p.vault}-${p.id}`}>
+            <tr key={rowKey(p)}>
               <td><span className="vbadge">{p.vault}</span></td>
               <td className="num">{p.id}</td>
               <td className="mono">{shortAddr(p.recipient)}</td>
@@ -56,9 +63,9 @@ export function Approvals({
               <td className="num">{p.approvalCount} of {p.threshold}</td>
               <td className="r">
                 <button className="btn small" disabled={busy != null} onClick={() => approve(p)}>
-                  {busy === p.id ? "Approving…" : "Approve"}
+                  {busy === rowKey(p) ? "Approving…" : "Approve"}
                 </button>
-                {notice?.id === p.id && (
+                {notice?.id === rowKey(p) && (
                   <div className={notice.kind === "ok" ? "dim" : ""} style={{ fontSize: 11.5, marginTop: 4, color: notice.kind === "err" ? "var(--bad)" : undefined }}>
                     {notice.text}{notice.url && <> <a href={notice.url} target="_blank" rel="noopener">tx</a></>}
                   </div>

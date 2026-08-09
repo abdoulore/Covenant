@@ -2,12 +2,23 @@ import { useMemo, useState } from "react";
 import { api, ApiError, type WriteResult } from "../api";
 import { toBaseUnits, usdc } from "../lib";
 
-type Kind = "timelock" | "approval" | "attestation" | "oracle" | "recurring" | "sweep";
+type Kind = "timelock" | "approval" | "attestation" | "oraclePull" | "recurring" | "sweep";
 type Step = "form" | "review" | "result";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
-const KINDS: Kind[] = ["timelock", "approval", "attestation", "oracle", "recurring", "sweep"];
-const HAS_AMOUNT = new Set<Kind>(["timelock", "approval", "attestation", "oracle"]);
+/**
+ * Six conditions, and exactly one of them is the oracle.
+ *
+ * The vault still carries the older pushed-feed Oracle condition and the API still accepts it, so
+ * existing policies read and release normally. It is not offered here because the pull path beats it
+ * on every axis for a new policy: one transaction instead of two, no window between refreshing the
+ * price and releasing on it, and it can refuse a price whose confidence interval is too wide. A
+ * picker with two oracles would be inviting an operator to choose the weaker one.
+ */
+const KINDS: Kind[] = ["timelock", "approval", "attestation", "oraclePull", "recurring", "sweep"];
+const HAS_AMOUNT = new Set<Kind>(["timelock", "approval", "attestation", "oraclePull"]);
+const KIND_LABEL: Partial<Record<Kind, string>> = { oraclePull: "oracle" };
+const IS_ORACLE = (k: Kind) => k === "oraclePull";
 
 const DEST = [
   { domain: 26, name: "Arc (same chain)" },
@@ -45,6 +56,8 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
   const [comparator, setComparator] = useState<"Gte" | "Lte">("Gte");
   const [thresholdPrice, setThresholdPrice] = useState("0.995");
   const [maxStale, setMaxStale] = useState(120);
+  /** Pull-oracle only: reject when the oracle's confidence interval exceeds this share of the price. */
+  const [maxConfBps, setMaxConfBps] = useState(50);
   // recurring / sweep
   const [amountPerPeriod, setAmountPerPeriod] = useState("");
   const [buffer, setBuffer] = useState("");
@@ -61,7 +74,13 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
   const perBase = useMemo(() => toBaseUnits(amountPerPeriod), [amountPerPeriod]);
   const bufBase = useMemo(() => bufferBase(buffer), [buffer]);
   const minBase = useMemo(() => toBaseUnits(minSweep), [minSweep]);
-  const thrE8 = /^\d+(\.\d{1,8})?$/.test(thresholdPrice.trim()) ? Math.round(parseFloat(thresholdPrice) * 1e8).toString() : null;
+  const validPrice = /^\d+(\.\d{1,8})?$/.test(thresholdPrice.trim());
+  // The threshold is compared in 1e18, because the adapter normalizes every oracle to one scale.
+  // Built from the 8 decimal integer via BigInt, not a float: 0.995 * 1e18 in double precision is
+  // not 995000000000000000, and a threshold off by a rounding error is a payment rule that is wrong.
+  const thr1e18 = validPrice
+    ? (BigInt(Math.round(parseFloat(thresholdPrice) * 1e8)) * 10_000_000_000n).toString()
+    : null;
 
   const problems: string[] = [];
   if (!ADDR.test(recipient)) problems.push("Recipient must be a 0x address.");
@@ -73,9 +92,12 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
     if (!Number.isInteger(threshold) || threshold < 1 || threshold > approvers.length) problems.push("Threshold must be between 1 and the number of approvers.");
   }
   if (kind === "attestation" && !ADDR.test(attester)) problems.push("Attester must be a 0x address.");
-  if (kind === "oracle") {
-    if (!thrE8) problems.push("Threshold must be a price like 0.995.");
+  if (IS_ORACLE(kind)) {
+    if (!thr1e18) problems.push("Threshold must be a price like 0.995.");
     if (!Number.isInteger(maxStale) || maxStale <= 0) problems.push("Staleness window must be a positive number of seconds.");
+  }
+  if (kind === "oraclePull" && (!Number.isInteger(maxConfBps) || maxConfBps < 0 || maxConfBps > 10_000)) {
+    problems.push("Confidence bound must be between 0 and 10000 basis points (0 disables it).");
   }
   if (kind === "recurring") {
     if (!perBase) problems.push("Amount per period must be positive.");
@@ -98,7 +120,7 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
       if (kind === "timelock") r = await api.createTimelock({ ...common, amount: base!, releaseTime: releaseUnix });
       else if (kind === "approval") r = await api.createApproval({ ...common, amount: base!, approvers, threshold });
       else if (kind === "attestation") r = await api.createAttestation({ ...common, amount: base!, attester });
-      else if (kind === "oracle") r = await api.createOracle({ ...common, amount: base!, feedKey: "USDC/USD", comparator, threshold: thrE8!, maxStaleSeconds: maxStale });
+      else if (kind === "oraclePull") r = await api.createOraclePull({ ...common, amount: base!, feedKey: "USDC/USD", comparator, threshold1e18: thr1e18!, maxStaleSeconds: maxStale, maxConfBps });
       else if (kind === "recurring") r = await api.createRecurring({ ...common, amountPerPeriod: perBase!, interval, startTime: startUnix, periods, maxCatchUp });
       else r = await api.createSweep({ ...common, buffer: bufBase!, minSweep: minBase!, interval, startTime: startUnix, maxCatchUp });
       setResult(r);
@@ -115,14 +137,14 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="close" onClick={onClose} aria-label="Close">×</button>
+        <button className="close" onClick={onClose} aria-label="Close">Ã—</button>
 
         {step === "form" && (
           <>
             <h3>Create a policy</h3>
             <div className="row" style={{ margin: "14px 0", gap: 6 }}>
               {KINDS.map((k) => (
-                <button key={k} className={`btn ${kind === k ? "" : "ghost"} small`} onClick={() => setKind(k)}>{k}</button>
+                <button key={k} className={`btn ${kind === k ? "" : "ghost"} small`} onClick={() => setKind(k)}>{KIND_LABEL[k] ?? k}</button>
               ))}
             </div>
 
@@ -170,9 +192,14 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
                 <div className="hint">Releasable when this address signs the policy's EIP-712 statement.</div></label>
             )}
 
-            {kind === "oracle" && (
+            {IS_ORACLE(kind) && (
               <>
-                <div className="hint" style={{ margin: "4px 0 10px" }}>Feed: USDC/USD via Pyth{oraclePrice != null ? <>, live now <span className="mono">{oraclePrice.toFixed(6)}</span></> : ""} (the only supported feed in v1).</div>
+                <div className="hint" style={{ margin: "4px 0 10px" }}>
+                  Feed: USDC/USD via Pyth{oraclePrice != null ? <>, live now <span className="mono">{oraclePrice.toFixed(6)}</span></> : ""} (the only supported feed in v1).
+                  {kind === "oraclePull"
+                    ? " Verified and released in one transaction, and a price the oracle is unsure of is refused."
+                    : " Reads a pushed feed, so the price must be refreshed before release, and confidence cannot be checked on this path."}
+                </div>
                 <div className="row">
                   <label className="field" style={{ width: 150 }}><span className="lab">Release when price</span>
                     <select value={comparator} onChange={(e) => setComparator(e.target.value as "Gte" | "Lte")}>
@@ -180,11 +207,22 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
                     </select></label>
                   <label className="field" style={{ flex: 1 }}><span className="lab">Threshold price</span>
                     <input inputMode="decimal" value={thresholdPrice} onChange={(e) => setThresholdPrice(e.target.value)} placeholder="0.995" />
-                    <div className="hint">{oraclePrice != null && thrE8 ? `${comparator === "Gte" ? "met" : "unmet"} at the live price ${(oraclePrice >= parseFloat(thresholdPrice)) === (comparator === "Gte") ? "(condition would release)" : "(condition would hold)"}` : "in USD, e.g. 0.995"}</div></label>
+                    <div className="hint">{oraclePrice != null && thr1e18 ? `${comparator === "Gte" ? "met" : "unmet"} at the live price ${(oraclePrice >= parseFloat(thresholdPrice)) === (comparator === "Gte") ? "(condition would release)" : "(condition would hold)"}` : "in USD, e.g. 0.995"}</div></label>
                 </div>
-                <label className="field" style={{ width: 200 }}><span className="lab">Staleness window (seconds)</span>
-                  <input inputMode="numeric" value={maxStale} onChange={(e) => setMaxStale(Number(e.target.value) || 0)} />
-                  <div className="hint">A price older than this fails closed.</div></label>
+                <div className="row">
+                  <label className="field" style={{ width: 200 }}><span className="lab">Staleness window (seconds)</span>
+                    <input inputMode="numeric" value={maxStale} onChange={(e) => setMaxStale(Number(e.target.value) || 0)} />
+                    <div className="hint">A price older than this fails closed.</div></label>
+                  {kind === "oraclePull" && (
+                    <label className="field" style={{ width: 220 }}><span className="lab">Confidence bound (bps)</span>
+                      <input inputMode="numeric" value={maxConfBps} onChange={(e) => setMaxConfBps(Number(e.target.value) || 0)} />
+                      <div className="hint">
+                        {maxConfBps > 0
+                          ? `Refuse when Pyth's uncertainty exceeds ${(maxConfBps / 100).toFixed(2)}% of the price.`
+                          : "0 disables the check: any confidence is accepted."}
+                      </div></label>
+                  )}
+                </div>
               </>
             )}
 
@@ -253,7 +291,10 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
               {kind === "timelock" && <KV k="Releasable at" v={new Date(releaseUnix * 1000).toLocaleString()} />}
               {kind === "approval" && <KV k="Approvals" v={`${threshold} of ${approvers.length}`} />}
               {kind === "attestation" && <KV k="Attester" v={attester} />}
-              {kind === "oracle" && <KV k="Rule" v={`USDC/USD ${comparator === "Gte" ? "≥" : "≤"} ${thresholdPrice}, stale > ${maxStale}s fails closed`} />}
+              {IS_ORACLE(kind) && <KV k="Rule" v={`USDC/USD ${comparator === "Gte" ? "≥" : "≤"} ${thresholdPrice}, stale > ${maxStale}s fails closed`} />}
+              {kind === "oraclePull" && (
+                <KV k="Confidence" v={maxConfBps > 0 ? `refuse above ${(maxConfBps / 100).toFixed(2)}% uncertainty` : "not enforced"} />
+              )}
               {kind === "recurring" && <KV k="Schedule" v={`${usdc(perBase)} every ${interval}s, ${periods ? `${periods} periods` : "open-ended"}`} />}
               {kind === "sweep" && <KV k="Sweep" v={`keep ${usdc(bufBase)}, min ${usdc(minBase)}, every ${interval}s`} />}
             </div>
@@ -287,3 +328,4 @@ export function CreatePolicy({ onClose, onCreated, oraclePrice }: { onClose: () 
 function KV({ k, v }: { k: string; v: string }) {
   return <div className="kv"><span className="k">{k}</span><span className="v">{v}</span></div>;
 }
+

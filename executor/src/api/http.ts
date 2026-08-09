@@ -109,15 +109,22 @@ export function clientIp(req: IncomingMessage): string {
 /**
  * A fixed-window rate limiter. Deliberately simple and in-process: v1 is a single-operator API, so
  * this is abuse protection, not a distributed quota. Returns false when the caller is over budget.
+ *
+ * Keys are caller-supplied (an IP), so the map is swept as it goes. An unbounded map keyed by
+ * anything an unauthenticated caller controls is a slow memory leak with a name: the process that
+ * has been up longest is the one that falls over.
  */
 export class RateLimiter {
   private readonly hits = new Map<string, { count: number; windowStart: number }>();
+  private lastSweep = 0;
+
   constructor(
     private readonly limit: number,
     private readonly windowMs: number,
   ) {}
 
   allow(key: string, now = Date.now()): boolean {
+    this.sweep(now);
     const rec = this.hits.get(key);
     if (!rec || now - rec.windowStart >= this.windowMs) {
       this.hits.set(key, { count: 1, windowStart: now });
@@ -125,5 +132,72 @@ export class RateLimiter {
     }
     rec.count += 1;
     return rec.count <= this.limit;
+  }
+
+  /** Visible for tests: how many keys are currently held. */
+  get size(): number {
+    return this.hits.size;
+  }
+
+  /** Drop windows that have expired. Amortised: at most once per window. */
+  private sweep(now: number): void {
+    if (now - this.lastSweep < this.windowMs) return;
+    this.lastSweep = now;
+    for (const [key, rec] of this.hits) {
+      if (now - rec.windowStart >= this.windowMs) this.hits.delete(key);
+    }
+  }
+}
+
+/**
+ * A bounded, expiring map.
+ *
+ * Used for idempotency records, whose keys come straight off a request header. Without a TTL and a
+ * ceiling, any caller can grow the process's memory one header at a time, and nothing ever frees
+ * it: the entries are only useful for as long as a client might retry.
+ *
+ * Eviction is oldest-first by insertion, which Map iteration gives for free.
+ */
+export class TtlCache<T> {
+  private readonly entries = new Map<string, { value: T; expiresAt: number }>();
+
+  constructor(
+    private readonly ttlMs: number,
+    private readonly maxEntries: number,
+  ) {}
+
+  get(key: string, now = Date.now()): T | undefined {
+    const hit = this.entries.get(key);
+    if (!hit) return undefined;
+    if (hit.expiresAt <= now) {
+      this.entries.delete(key);
+      return undefined;
+    }
+    return hit.value;
+  }
+
+  set(key: string, value: T, now = Date.now()): void {
+    this.sweep(now);
+    this.entries.delete(key); // re-insert so eviction order tracks last write
+    this.entries.set(key, { value, expiresAt: now + this.ttlMs });
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  delete(key: string): void {
+    this.entries.delete(key);
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  private sweep(now: number): void {
+    for (const [key, entry] of this.entries) {
+      if (entry.expiresAt <= now) this.entries.delete(key);
+    }
   }
 }
