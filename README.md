@@ -92,7 +92,8 @@ Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.exampl
 
 ```bash
 git submodule update --init # OpenZeppelin, required before the contracts will build
-npm install                 # install executor dependencies
+npm install                 # root and the executor workspace
+npm --prefix app install    # the app is a separate package with its own lockfile
 npm test                    # the Foundry contract suite and the executor suite
 
 npm run wallets:write       # create the Circle developer-controlled wallets

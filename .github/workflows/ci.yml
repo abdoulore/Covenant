@@ -28,7 +28,14 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
 
+      # Root plus the executor workspace.
       - run: npm ci
+
+      # The app is a separate package with its own lockfile, deliberately outside the workspace so
+      # Vite's dependency tree is not hoisted against the executor's. `npm ci` at the root therefore
+      # does not install it, and the typecheck and build below both need it.
+      - name: Install app dependencies
+        run: npm --prefix app ci
 
       - name: Contract suite
         run: npm run test:contracts
