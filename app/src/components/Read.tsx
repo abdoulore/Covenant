@@ -51,9 +51,18 @@ export function Cards({ state }: { state: AppState }) {
   const active = state.policies.filter((p) => p.effectiveStatus === "Pending" || p.effectiveStatus === "Releasable").length;
   const settled = state.settlements.filter((s) => s.status === "settled").length;
   const funded = state.policies.reduce((n, p) => n + Number(p.funded || 0), 0);
+  /**
+   * Named from the state, not from a number written into the copy.
+   *
+   * This card said "across both vaults" until the app stopped surfacing v3, at which point it was
+   * simply wrong on the first line of the first screen. Which deployments the app reads is a
+   * deployment decision that has already changed three times; the label has to follow it.
+   */
+  const vaults = state.vaults.map((v) => v.label);
+  const scope = vaults.length === 1 ? `policies on ${vaults[0]}` : `policies across ${vaults.join(" and ")}`;
   return (
     <div className="cards">
-      <div className="card"><div className="v">{state.policies.length}</div><div className="k">policies across both vaults</div></div>
+      <div className="card"><div className="v">{state.policies.length}</div><div className="k">{scope}</div></div>
       <div className="card"><div className="v">{active}</div><div className="k">active (pending or releasable)</div></div>
       <div className="card"><div className="v">{settled}</div><div className="k">settlements completed</div></div>
       <div className="card"><div className="v">{(funded / 1e6).toFixed(2)}</div><div className="k">USDC locked in vaults</div></div>
