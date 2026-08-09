@@ -86,6 +86,14 @@ function write<T>(path: string, payload?: unknown): Promise<T> {
 export const api = {
   getState: () => req<AppState>("/state"),
 
+  /**
+   * Whether the browser is still carrying a valid operator session.
+   *
+   * The session cookie is HttpOnly, so this is the only way the app can find out. Asked once on
+   * load: without it, a reload shows read-only while the operator is in fact still signed in.
+   */
+  session: () => req<{ signedIn: boolean }>("/session"),
+
   login: (secret: string) => write<{ ok: true }>("/session", { secret }),
   logout: () => req<{ ok: true }>("/session", { method: "DELETE" }),
 

@@ -214,6 +214,26 @@ export function createRequestHandler(deps: ApiDeps) {
       }
 
       // ---- session ----
+      /**
+       * Is the session this browser is holding still good?
+       *
+       * The cookie is HttpOnly, which is the point of it and also the reason the app cannot answer
+       * this for itself. Without somewhere to ask, a reload renders as read-only while every write
+       * would in fact have been accepted, and the operator is told they are signed out by a page
+       * that simply forgot. This reports on nothing but the cookie the caller already sent, so it
+       * discloses nothing they did not arrive with.
+       *
+       * Rate limited alongside the other public reads. It touches no chain and no store, but it
+       * does verify a token, and an unauthenticated route that verifies anything gets a ceiling.
+       */
+      if (method === "GET" && url === "/api/session") {
+        if (!readLimiter.allow(clientIp(req))) {
+          sendJson(res, 429, { error: "rate limited", message: "Too many reads, slow down." });
+          return;
+        }
+        sendJson(res, 200, { signedIn: authed(req) });
+        return;
+      }
       if (method === "POST" && url === "/api/session") {
         // Login mints the session, so it is a write for CSRF purposes and gets the same check.
         if (!originAllowed(req)) {

@@ -33,6 +33,12 @@ button { font-family: inherit; }
 .brand .accent { color: var(--text); display: inline-flex; align-items: center; gap: 9px; }
 .brand .accent::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--live); box-shadow: 0 0 12px var(--live); }
 .brand .sub { color: var(--dim); font-size: 12px; font-weight: 400; margin-left: 2px; }
+/* The brand is a link home. It takes none of the global anchor styling: an underlined wordmark
+   reads as body copy, so the hover lands on the accent colour instead. */
+a.brand { color: inherit; }
+a.brand:hover { text-decoration: none; }
+a.brand .accent { transition: color 0.15s; }
+a.brand:hover .accent { color: var(--live); }
 .nav { display: flex; gap: 3px; flex-wrap: wrap; }
 .nav button { background: none; border: none; color: var(--muted); padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; transition: background 0.15s, color 0.15s; }
 .nav button .ic { width: 15px; height: 15px; }

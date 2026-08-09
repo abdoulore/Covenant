@@ -41,7 +41,14 @@
   nav .links { display: flex; gap: 24px; font-size: 13.5px; align-items: center; }
   nav .links a { color: var(--muted); transition: color 0.15s; display: inline-flex; align-items: center; gap: 6px; }
   nav .links a:hover { color: var(--ink); }
-  @media (max-width: 620px) { nav .links a:not(.repo) { display: none; } }
+  /* The app link is the one action in a row of section jumps, so it takes a pill and the accent on
+     hover. Deliberately quieter than .btn.primary: the hero's own call to action still leads. */
+  nav .links a.app { color: var(--ink); border: 1px solid var(--line); background: rgba(255,255,255,0.02); border-radius: 999px; padding: 7px 15px; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  nav .links a.app:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+  nav .links a.app .ic { width: 14px; height: 14px; transition: transform 0.15s; }
+  nav .links a.app:hover .ic { transform: translate(2px,-2px); }
+  /* Narrow screens keep the two links that leave the page; the section jumps go. */
+  @media (max-width: 620px) { nav .links a:not(.repo):not(.app) { display: none; } }
 
   /* hero */
   .hero-wrap { position: relative; overflow: hidden; }
@@ -252,7 +259,7 @@
   <div class="wrap">
     <nav>
       <div class="brand"><span class="d"></span> Covenant</div>
-      <div class="links">
+      <div class="links" id="nav-links">
         <a href="#how">How it works</a>
         <a href="#conditions">Conditions</a>
         <a href="#numbers">Proof</a>
@@ -493,8 +500,8 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
  * Where the operator app lives.
  *
  * A relative path, because the landing page and the app deploy together to one host: this file at
- * the root, the app bundle under /app. Set to "" to hide the button, which is what a landing page
- * should do rather than offer a dead link.
+ * the root, the app bundle under /app. Set to "" to hide every route into the app, which is what a
+ * landing page should do rather than offer a dead link.
  *
  * Being same-origin with the app changes nothing about the app's own connection to the write API,
  * which runs on a host that can keep a process alive and is cross-origin either way. See the
@@ -503,6 +510,13 @@ usdc.<span class="fn">safeTransfer</span>(executor, amt);
 const APP_URL = "/app";
 
 if (APP_URL) {
+  // Two ways in: the nav, for a reader who arrived knowing what they came for, and the hero, for
+  // one who needed convincing first. Both injected from the same constant behind the same switch,
+  // so there is no way to configure this file that leaves one of them pointing at nothing.
+  document.getElementById("nav-links").insertAdjacentHTML(
+    "beforeend",
+    `<a class="app" href="${APP_URL}" target="_blank" rel="noopener">Open the app <svg class="ic"><use href="#i-arrow"/></svg></a>`,
+  );
   document.getElementById("cta").insertAdjacentHTML(
     "afterbegin",
     `<a class="btn ghost" href="${APP_URL}" target="_blank" rel="noopener">Open the operator app <svg class="ic"><use href="#i-arrow"/></svg></a>`,
