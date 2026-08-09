@@ -139,6 +139,25 @@ contract PolicyVaultOracleTest is Test {
         assertFalse(vault.checkCondition(id));
     }
 
+    /// @dev A future-dated answer is the one bad input that could break the fail-closed promise
+    ///      instead of honouring it: `block.timestamp - updatedAt` sits outside the try block, so an
+    ///      underflow there reverts the whole call. checkCondition and statusOf must keep reading.
+    function test_Oracle_FailsClosedOnFutureDatedAnswer() public {
+        uint256 id = _create(PolicyVault.Comparator.Gte);
+        _fund(id);
+        feed.setAnswerAt(THRESHOLD + 1, block.timestamp + 1); // one second ahead of the chain
+
+        assertFalse(vault.checkCondition(id), "a future-dated answer must read as not met");
+        assertEq(uint8(vault.statusOf(id)), uint8(PolicyVault.Status.Pending), "statusOf must not revert");
+
+        vm.expectRevert(abi.encodeWithSelector(PolicyVault.ConditionNotMet.selector, id));
+        vault.release(id);
+
+        // Once the chain catches up to the answer, the same data releases normally.
+        vm.warp(block.timestamp + 1);
+        assertTrue(vault.checkCondition(id));
+    }
+
     function test_Oracle_FailsClosedWhenFeedReverts() public {
         uint256 id = _create(PolicyVault.Comparator.Gte);
         feed.setAnswer(THRESHOLD + 1);

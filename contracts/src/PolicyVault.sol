@@ -4,9 +4,11 @@ pragma solidity 0.8.28;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IOracleAdapter} from "./IOracleAdapter.sol";
 
 /// @notice Minimal Chainlink Data Feed interface. Only the call the Oracle condition needs.
 /// @dev Defined inline rather than pulling in the Chainlink package for one method. Arc has
@@ -25,26 +27,60 @@ interface IAggregatorV3 {
 /// @dev DECIMALS, READ THIS BEFORE CHANGING ANYTHING.
 ///      Arc exposes one pool of USDC through two views: an 18 decimal native view used for gas
 ///      and msg.value, and a 6 decimal ERC-20 view at 0x3600000000000000000000000000000000000000.
-///      They are the same balance, 10^12 apart. This contract deals exclusively in the 6 decimal
-///      ERC-20 view. Every `amount` in this file is 6 decimals. There is deliberately no receive()
-///      or fallback() and no payable function, so native value cannot enter and cannot be trapped
-///      at the wrong scale. See docs/VERIFICATIONS.md V1a.
-contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
+///      They are the same balance, 10^12 apart. Every policy `amount`, `funded`, and slice in this
+///      file is the 6 decimal ERC-20 view, moved only with usdc.safeTransfer. See VERIFICATIONS V1a.
+///
+///      NATIVE VALUE, THE ONE EXCEPTION (v4).
+///      Through v3 this contract had no payable function at all, so native value could not enter and
+///      could not be trapped at the wrong scale. v4 adds exactly one: releaseWithProof, which must
+///      pay the oracle's verification fee in the native token to verify a price and release in a
+///      single transaction. The invariant is preserved by keeping the two scales in separate
+///      channels rather than by refusing one of them:
+///
+///        - msg.value is 18 decimal native, and is only ever forwarded to the adapter as its quoted
+///          fee or refunded to the caller. It never reaches amount, funded, or a slice.
+///        - Policy amounts remain 6 decimal ERC-20 and are only ever moved with usdc.safeTransfer.
+///        - There is still no receive() and no fallback(), so releaseWithProof is the only door.
+///        - The refund reverts on failure rather than being skipped, so no native dust can settle
+///          here. A successful releaseWithProof leaves this contract's native balance unchanged.
+///
+/// @dev Ownership is two-step (Ownable2Step). The vault is immutable and only the owner can cancel
+///      a policy or refund it, so a single-step transfer to a mistyped address would strand every
+///      deposit permanently. The new owner must call acceptOwnership() before ownership moves.
+contract PolicyVault is Ownable2Step, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
     /// @notice CCTP domain identifier for Arc. See docs/VERIFICATIONS.md V3.
     uint32 public constant ARC_DOMAIN = 26;
+
+    /// @notice Largest approver set an Approval policy may carry, bounded by approvalCount's uint8.
+    uint256 public constant MAX_APPROVERS = 255;
 
     /// @dev EIP-712 type for an attestation. Binds a signature to a single policyId, and the
     ///      domain separator binds it to this contract and chain, so a signature cannot be
     ///      replayed across policies, deployments, or chains. See docs/specs/PHASE2_CONDITION_TYPES.md.
     bytes32 private constant ATTESTATION_TYPEHASH = keccak256("Attestation(uint256 policyId)");
 
+    /// @dev Values are append-only, so a policy read from v2 or v3 keeps its meaning here.
+    ///
+    ///      Schedule is the recurring/sweep marker. It is not a single-shot condition: a scheduled
+    ///      policy is gated by isPeriodDue(), not checkCondition(), which returns false for it. It
+    ///      exists so PolicyCreated reports a scheduled policy honestly instead of defaulting to
+    ///      Timelock, which is what an indexer would otherwise read.
+    ///
+    ///      Oracle and OraclePull are both live and both fail closed, and they differ in how the
+    ///      price arrives. Oracle reads a pushed AggregatorV3 feed, so release() is one transaction
+    ///      but somebody must have refreshed the feed first, and the interface carries no confidence
+    ///      interval to check. OraclePull takes a signed proof through an adapter, verifies and
+    ///      releases atomically in releaseWithProof(), and can reject a wide-uncertainty price.
+    ///      New policies should prefer OraclePull; Oracle remains for the simpler pushed-feed case.
     enum ConditionType {
         Timelock,
         Approval,
         Attestation,
-        Oracle
+        Oracle,
+        Schedule,
+        OraclePull
     }
 
     /// @notice Direction of an Oracle comparison against the threshold.
@@ -103,6 +139,13 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         uint64 maxCatchUp;       // a period overdue beyond this is held for owner approval
         uint32 periods;          // payroll total, 0 for open-ended
         uint32 periodsReleased;  // periods released so far, and the index emitted per release
+        // OraclePull condition (v4). Reuses comparator and maxStaleSeconds, and reuses
+        // oracleThreshold with ONE DIFFERENCE THAT MATTERS: for Oracle the threshold is in the
+        // feed's own decimals, for OraclePull it is 1e18, because the adapter normalizes. A reader
+        // must branch on conditionType to scale it, and the app and read model do.
+        address adapter;         // IOracleAdapter that verifies the proof
+        bytes32 feedId;          // the oracle's identifier for the feed
+        uint16 maxConfBps;       // reject when conf/price exceeds this, in basis points. 0 disables
     }
 
     IERC20 public immutable usdc;
@@ -168,6 +211,11 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
     error SweepBelowMin(uint256 policyId, uint256 slice, uint256 minSweep);
     error InvalidRecurringConfig();
     error InvalidSweepConfig();
+    error UseReleaseWithProof(uint256 policyId);
+    error InvalidOraclePullConfig();
+    error InsufficientFee(uint256 required, uint256 sent);
+    error ConfidenceTooWide(uint256 policyId, uint256 conf, uint256 value, uint16 maxConfBps);
+    error RefundFailed(address to, uint256 amount);
 
     constructor(address usdc_, address executor_, address owner_)
         Ownable(owner_)
@@ -214,11 +262,15 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
             if (releaseTime <= block.timestamp) revert ReleaseTimeInPast(releaseTime, block.timestamp);
         } else if (conditionType == ConditionType.Approval) {
             if (releaseTime != 0) revert InvalidApprovalConfig();
-            if (approvers.length == 0 || threshold == 0 || threshold > approvers.length) {
+            // The cap is what keeps approvalCount, a uint8, from wrapping. At 256 approvals it
+            // would return to zero and un-meet a condition that had already been satisfied, which
+            // turns any large approver set into a way to block a release that should have fired.
+            if (approvers.length == 0 || approvers.length > MAX_APPROVERS || threshold == 0 || threshold > approvers.length) {
                 revert InvalidApprovalConfig();
             }
         } else {
-            // Attestation and Oracle policies carry different parameters and have their own creators.
+            // Attestation, Oracle, Schedule and OraclePull carry different parameters and each have
+            // their own creator.
             revert UseTypedCreator(conditionType);
         }
 
@@ -357,6 +409,60 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         emit PolicyCreated(policyId, recipient, amount, payoutCurrency, destinationDomain, ConditionType.Oracle);
     }
 
+    /// @notice Create a pull-oracle policy. It releases through releaseWithProof(), which verifies a
+    ///         signed price update and releases in a single transaction.
+    /// @param adapter IOracleAdapter that verifies the proof and normalizes the price to 1e18.
+    /// @param feedId The oracle's identifier for the feed.
+    /// @param comparator Gte releases at or above the threshold, Lte at or below.
+    /// @param threshold1e18 Comparison value, normalized to 18 decimals. NOT the feed's own decimals:
+    ///        the adapter normalizes, so every oracle compares in one scale. This is the difference
+    ///        from createOraclePolicy that is easiest to get wrong.
+    /// @param maxStaleSeconds Oldest acceptable publish time. Enforced inside the adapter's window.
+    /// @param maxConfBps Reject when the confidence interval exceeds this fraction of the price, in
+    ///        basis points. 0 disables the check. The wrapper-based Oracle condition cannot do this
+    ///        at all, because AggregatorV3Interface carries no confidence field.
+    function createOraclePullPolicy(
+        address recipient,
+        uint256 amount,
+        PayoutCurrency payoutCurrency,
+        uint32 destinationDomain,
+        address adapter,
+        bytes32 feedId,
+        Comparator comparator,
+        int256 threshold1e18,
+        uint64 maxStaleSeconds,
+        uint16 maxConfBps
+    ) external onlyOwner returns (uint256 policyId) {
+        if (recipient == address(0) || adapter == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (maxStaleSeconds == 0 || feedId == bytes32(0) || maxConfBps > 10_000) {
+            revert InvalidOraclePullConfig();
+        }
+
+        // Same route guard as createPolicy: EURC has no cross-chain path. See docs/DECISIONS.md D1.
+        if (payoutCurrency == PayoutCurrency.EURC && destinationDomain != ARC_DOMAIN) {
+            revert UnsupportedRoute(payoutCurrency, destinationDomain);
+        }
+
+        policyId = nextPolicyId++;
+
+        Policy storage p = _policies[policyId];
+        p.recipient = recipient;
+        p.amount = amount;
+        p.payoutCurrency = payoutCurrency;
+        p.destinationDomain = destinationDomain;
+        p.conditionType = ConditionType.OraclePull;
+        p.adapter = adapter;
+        p.feedId = feedId;
+        p.comparator = comparator;
+        p.oracleThreshold = threshold1e18;
+        p.maxStaleSeconds = maxStaleSeconds;
+        p.maxConfBps = maxConfBps;
+        p.status = Status.Pending;
+
+        emit PolicyCreated(policyId, recipient, amount, payoutCurrency, destinationDomain, ConditionType.OraclePull);
+    }
+
     /// @notice Create a recurring payroll policy: release `amountPerPeriod` every `interval` seconds,
     ///         for `periods` periods, or open-ended when `periods` is 0. Released via releasePeriod().
     /// @dev A period overdue by more than `maxCatchUp` is held for approveStalePeriod(), so a
@@ -383,6 +489,7 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         p.recipient = recipient;
         p.payoutCurrency = payoutCurrency;
         p.destinationDomain = destinationDomain;
+        p.conditionType = ConditionType.Schedule;
         p.recurring = true;
         p.amountPerPeriod = amountPerPeriod;
         p.interval = interval;
@@ -391,7 +498,7 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         p.maxCatchUp = maxCatchUp;
         p.status = Status.Pending;
 
-        emit PolicyCreated(policyId, recipient, amountPerPeriod, payoutCurrency, destinationDomain, p.conditionType);
+        emit PolicyCreated(policyId, recipient, amountPerPeriod, payoutCurrency, destinationDomain, ConditionType.Schedule);
     }
 
     /// @notice Create a sweep policy: on schedule, release everything funded above `buffer` to the
@@ -417,6 +524,7 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         p.recipient = recipient;
         p.payoutCurrency = payoutCurrency;
         p.destinationDomain = destinationDomain;
+        p.conditionType = ConditionType.Schedule;
         p.recurring = true;
         p.isSweep = true;
         p.buffer = buffer;
@@ -426,7 +534,7 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         p.maxCatchUp = maxCatchUp;
         p.status = Status.Pending;
 
-        emit PolicyCreated(policyId, recipient, 0, payoutCurrency, destinationDomain, p.conditionType);
+        emit PolicyCreated(policyId, recipient, 0, payoutCurrency, destinationDomain, ConditionType.Schedule);
     }
 
     /// @notice Release the currently due period of a recurring policy. Permissionless, like release().
@@ -482,11 +590,73 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
     function release(uint256 policyId) external nonReentrant {
         Policy storage p = _requirePolicy(policyId);
         if (p.recurring) revert UseReleasePeriod(policyId);
+        // A pull-oracle policy has no condition to read without a proof, so it cannot be released
+        // here. Naming the right entrypoint beats a bare ConditionNotMet that looks like bad luck.
+        if (p.conditionType == ConditionType.OraclePull) revert UseReleaseWithProof(policyId);
         if (p.status != Status.Pending) revert PolicyNotPending(policyId, p.status);
         if (!_conditionMet(p)) revert ConditionNotMet(policyId);
         if (p.funded < p.amount) revert Underfunded(policyId, p.funded, p.amount);
 
+        _release(policyId, p);
+    }
+
+    /// @notice Release a pull-oracle policy by submitting a signed price update. Permissionless.
+    ///
+    /// @dev One transaction: the adapter verifies the proof, enforces the freshness window, and
+    ///      returns a normalized price, and the release happens on the same verified read. The
+    ///      wrapper-based Oracle condition needs two transactions (refresh, then release) with a
+    ///      window in between; here there is no window.
+    ///
+    ///      Payable, which is the single exception to this contract's no-native-value rule. Read the
+    ///      NATIVE VALUE note at the top of this file before changing anything here. Send at least
+    ///      quoteFee(proof); the excess comes back.
+    ///
+    /// @param proof The oracle's signed update blob, opaque here and interpreted by the adapter.
+    function releaseWithProof(uint256 policyId, bytes calldata proof) external payable nonReentrant {
+        Policy storage p = _requirePolicy(policyId);
+        if (p.conditionType != ConditionType.OraclePull) {
+            revert WrongConditionType(policyId, ConditionType.OraclePull, p.conditionType);
+        }
+        if (p.status != Status.Pending) revert PolicyNotPending(policyId, p.status);
+        if (p.funded < p.amount) revert Underfunded(policyId, p.funded, p.amount);
+
+        IOracleAdapter adapter = IOracleAdapter(p.adapter);
+        uint256 fee = adapter.quoteFee(proof);
+        if (msg.value < fee) revert InsufficientFee(fee, msg.value);
+
+        // Exactly the quoted fee is forwarded. The adapter reverts if the proof does not verify or
+        // falls outside [now - maxStaleSeconds, now], so a bad or future-dated proof never gets here.
+        (int256 value, uint256 conf,) = adapter.verifyAndRead{value: fee}(p.feedId, proof, p.maxStaleSeconds);
+
+        bool met = p.comparator == Comparator.Gte ? value >= p.oracleThreshold : value <= p.oracleThreshold;
+        if (!met) revert ConditionNotMet(policyId);
+
+        // Confidence guard. A price the oracle itself is unsure about is not a price to pay against,
+        // however well it happens to sit against the threshold. value > 0 is guaranteed by the
+        // adapter, so the cast is safe, and the comparison is cross-multiplied to avoid dividing.
+        if (p.maxConfBps != 0 && conf * 10_000 > uint256(value) * p.maxConfBps) {
+            revert ConfidenceTooWide(policyId, conf, uint256(value), p.maxConfBps);
+        }
+
+        _release(policyId, p);
+
+        // Refund before returning, and revert if it fails rather than keeping it. Native dust
+        // settling in this contract is exactly what the no-native-value rule was protecting against.
+        uint256 refund = msg.value - fee;
+        if (refund > 0) {
+            (bool ok,) = payable(msg.sender).call{value: refund}("");
+            if (!ok) revert RefundFailed(msg.sender, refund);
+        }
+    }
+
+    /// @dev The single-shot release body, shared by release() and releaseWithProof(). Callers do
+    ///      their own condition checking; this performs the state change and the transfer.
+    function _release(uint256 policyId, Policy storage p) private {
         p.status = Status.Executed;
+        // Drawn down, not left standing: funded is the vault's record of what it holds for this
+        // policy, and the transfer below empties it. Leaving it at the paid amount would report a
+        // balance the vault no longer has, to cancel(), to statusOf(), and to every reader.
+        p.funded -= p.amount;
         address executor_ = executor;
 
         usdc.safeTransfer(executor_, p.amount);
@@ -566,7 +736,14 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
         if (p.conditionType == ConditionType.Attestation) {
             return p.attested;
         }
-        return _oracleConditionMet(p); // Oracle
+        if (p.conditionType == ConditionType.Oracle) {
+            return _oracleConditionMet(p);
+        }
+        // Schedule and OraclePull. Neither has a condition that can be evaluated from stored state
+        // alone: a schedule's gate is isPeriodDue(), and a pull oracle's gate is a proof supplied at
+        // release. Returning false keeps checkCondition() and statusOf() from reading as
+        // "releasable" to an offchain consumer that does not know to ask differently.
+        return false;
     }
 
     /// @dev Fail closed. Any doubt about the data means the condition is not met, so release does
@@ -577,6 +754,11 @@ contract PolicyVault is Ownable, ReentrancyGuard, EIP712 {
             uint80 roundId, int256 answer, uint256, uint256 updatedAt, uint80 answeredInRound
         ) {
             if (answer <= 0 || updatedAt == 0 || answeredInRound < roundId) return false;
+            // A future-dated answer is rejected, not subtracted. `block.timestamp - updatedAt`
+            // underflows for updatedAt > now, and that arithmetic sits outside the try, so it would
+            // revert the whole call rather than fail closed: checkCondition() and statusOf() would
+            // start reverting on one bad feed instead of reading "not yet".
+            if (updatedAt > block.timestamp) return false;
             if (block.timestamp - updatedAt > p.maxStaleSeconds) return false;
             return p.comparator == Comparator.Gte ? answer >= p.oracleThreshold : answer <= p.oracleThreshold;
         } catch {

@@ -250,4 +250,68 @@ contract PolicyVaultSchedulingTest is Test {
         vault.createSweepPolicy(recipient, PolicyVault.PayoutCurrency.USDC, ARC_DOMAIN, 10 * ONE_USDC, ONE_USDC, 0, now_, 7 * DAY);
         vm.stopPrank();
     }
+
+    // ---------------------------------------------------------------------
+    // How a scheduled policy reports itself
+    // ---------------------------------------------------------------------
+
+    event PolicyCreated(
+        uint256 indexed policyId,
+        address indexed recipient,
+        uint256 amount,
+        PolicyVault.PayoutCurrency payoutCurrency,
+        uint32 destinationDomain,
+        PolicyVault.ConditionType conditionType
+    );
+
+    /// @dev A scheduled policy must not read as a satisfied Timelock. Both the stored type and the
+    ///      creation event say Schedule, so an indexer or keeper is not told the wrong thing.
+    function test_schedule_reportsScheduleConditionType() public {
+        uint64 now_ = uint64(block.timestamp);
+
+        vm.expectEmit(true, true, false, true);
+        emit PolicyCreated(0, recipient, ONE_USDC, PolicyVault.PayoutCurrency.USDC, ARC_DOMAIN, PolicyVault.ConditionType.Schedule);
+        vm.prank(owner);
+        uint256 payroll = vault.createRecurringPolicy(
+            recipient, PolicyVault.PayoutCurrency.USDC, ARC_DOMAIN, ONE_USDC, DAY, now_, 3, 7 * DAY
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit PolicyCreated(1, recipient, 0, PolicyVault.PayoutCurrency.USDC, ARC_DOMAIN, PolicyVault.ConditionType.Schedule);
+        vm.prank(owner);
+        uint256 sweep = vault.createSweepPolicy(
+            recipient, PolicyVault.PayoutCurrency.USDC, ARC_DOMAIN, 10 * ONE_USDC, ONE_USDC, DAY, now_, 7 * DAY
+        );
+
+        assertEq(uint8(vault.getPolicy(payroll).conditionType), uint8(PolicyVault.ConditionType.Schedule));
+        assertEq(uint8(vault.getPolicy(sweep).conditionType), uint8(PolicyVault.ConditionType.Schedule));
+    }
+
+    /// @dev checkCondition is the single-shot gate and does not apply to a schedule. It must read
+    ///      false, not true, so a consumer that does not know to call isPeriodDue is not misled.
+    function test_schedule_checkConditionIsFalse() public {
+        uint256 id = _recurring(ONE_USDC, 3, 7 * DAY);
+        _fund(id, 3 * ONE_USDC);
+
+        assertFalse(vault.checkCondition(id), "a schedule has no single-shot condition");
+        assertTrue(vault.isPeriodDue(id), "isPeriodDue is the gate that does apply");
+        assertEq(uint8(vault.statusOf(id)), uint8(PolicyVault.Status.Releasable));
+    }
+
+    function test_RevertWhen_createPolicyAsksForScheduleType() public {
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(PolicyVault.UseTypedCreator.selector, PolicyVault.ConditionType.Schedule)
+        );
+        vault.createPolicy(
+            recipient,
+            ONE_USDC,
+            PolicyVault.PayoutCurrency.USDC,
+            ARC_DOMAIN,
+            PolicyVault.ConditionType.Schedule,
+            0,
+            new address[](0),
+            0
+        );
+    }
 }
