@@ -12,7 +12,7 @@ The policy is USDC/USD depeg protection. It releases only while USDC holds its p
 
 Where to look:
 
-- **The onchain run**, in [RESULTS.md](RESULTS.md) under Oracle: create, a keyless price update (fee 1 wei of native USDC), release, payout, settled in 9.0 seconds. Both failure paths are proven in the same section: a "release only if USDC/USD below 0.99" depeg policy held unmet by a healthy live price, and a stale-price policy refused by the fail-closed staleness guard. Each reverts onchain with status 0.
+- **The onchain run**, in [RESULTS.md](RESULTS.md) under Oracle: create, a keyless price update (fee 1 wei of native USDC), release, payout, settled in 9.0 seconds. Both failure paths are proven in the same section: a "release only if USDC/USD below 0.99" depeg policy held unmet by a healthy live price, and a stale-price policy refused by the fail-closed staleness guard. Each reverts onchain with status 0. RESULTS.md also records where the fail-closed guarantee does not hold in the deployed vault: a future-dated feed answer reverts the condition read instead of returning false. Safe direction, but not what the guarantee said.
 - **The live panel**: run `npm run dashboard` and read the top panel. It plots the current Pyth USDC/USD price on a gauge against the 0.995 peg floor and the 0.990 depeg trigger, with the release verdict. Real data, updating live.
 
 ## 2. A settlement receipt with the measured custody gap
