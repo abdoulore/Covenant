@@ -492,3 +492,65 @@ describe("cors preflight", () => {
     expect(res.status).toBe(204);
   });
 });
+
+/**
+ * A refusal has to say what it refused.
+ *
+ * viem decodes a custom error into the cause chain and leaves the top-level shortMessage as a bare
+ * "the contract function reverted", so reading shortMessage alone tells the operator that something
+ * was refused while withholding what. Filmed against the live vault this surfaced as the raw
+ * selector 0x1f0c1db7 where ConditionNotMet(17) belonged.
+ */
+describe("revert reasons reach the operator decoded", () => {
+  /** Shaped like viem: the decoded name and args live on a nested cause, not on the top error. */
+  function viemLikeRevert(errorName: string, args: unknown[]) {
+    const top: any = new Error("execution reverted");
+    top.shortMessage = 'The contract function "releaseWithProof" reverted.';
+    top.cause = { data: { errorName, args } };
+    return top;
+  }
+
+  async function reasonFor(err: unknown): Promise<{ status: number; reason?: string }> {
+    const failing = new StubService();
+    failing.release = async () => { throw err; };
+    const { server: s, base: b } = await startServer(failing);
+    const cookie = await login(b);
+    const res = await fetch(`${b}/api/policies/v4/3/release`, { method: "POST", headers: { cookie } });
+    const body = (await res.json()) as any;
+    await new Promise<void>((r) => s.close(() => r()));
+    return { status: res.status, reason: body.reason };
+  }
+
+  it("names the custom error and its arguments", async () => {
+    const { status, reason } = await reasonFor(viemLikeRevert("ConditionNotMet", [17n]));
+    expect(status).toBe(400);
+    expect(reason).toBe("ConditionNotMet(17)");
+  });
+
+  it("carries every argument, so a confidence rejection shows its numbers", async () => {
+    const { reason } = await reasonFor(
+      viemLikeRevert("ConfidenceTooWide", [7n, 801260000000000n, 999849740000000000n, 4]),
+    );
+    expect(reason).toBe("ConfidenceTooWide(7, 801260000000000, 999849740000000000, 4)");
+  });
+
+  /** An Error(string) revert has no name, and its reason is already the message. */
+  it("falls back to a plain string reason", async () => {
+    const err: any = new Error("reverted");
+    err.shortMessage = "The contract function reverted.";
+    err.cause = { reason: "ERC20: insufficient allowance" };
+    const { reason } = await reasonFor(err);
+    expect(reason).toBe("ERC20: insufficient allowance");
+  });
+
+  /**
+   * When the ABI cannot decode the revert, shortMessage still carries the raw signature and is the
+   * more useful answer, so it must survive rather than be replaced by nothing.
+   */
+  it("keeps the undecodable signature rather than losing it", async () => {
+    const err: any = new Error("reverted");
+    err.shortMessage = 'The contract function "release" reverted with the following signature:\n0xdeadbeef';
+    const { reason } = await reasonFor(err);
+    expect(reason).toContain("0xdeadbeef");
+  });
+});

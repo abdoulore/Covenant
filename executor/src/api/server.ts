@@ -111,6 +111,28 @@ export function createRequestHandler(deps: ApiDeps) {
     return req.headers.origin === config.corsOrigin;
   };
 
+  /**
+   * The contract's own words for a refusal, if it gave any.
+   *
+   * A custom error decodes to a name and arguments, but only into the cause chain: viem's
+   * top-level `shortMessage` flattens to "the contract function reverted" and drops both. Reading
+   * shortMessage alone therefore tells an operator that something was refused while withholding
+   * what, which for a system whose whole claim is that refusals are legible is the wrong half to
+   * keep. When the ABI cannot decode the revert, shortMessage still carries the raw signature and
+   * remains the better answer, so this returns nothing and the caller falls back.
+   */
+  function decodedRevert(err: any): string | undefined {
+    for (let e = err, depth = 0; e && depth < 6; e = e.cause, depth++) {
+      const name = e?.data?.errorName;
+      if (typeof name === "string" && name.length > 0) {
+        const args = Array.isArray(e.data.args) ? e.data.args.map((a: unknown) => String(a)).join(", ") : "";
+        return `${name}(${args})`;
+      }
+      if (typeof e?.reason === "string" && e.reason.length > 0) return e.reason;
+    }
+    return undefined;
+  }
+
   /** Turn a thrown error into the response body the operator sees. */
   function errorResponse(err: any): { status: number; body: unknown } {
     if (err instanceof BadRequest) {
@@ -118,7 +140,7 @@ export function createRequestHandler(deps: ApiDeps) {
     }
     // A contract revert or provider error: surface the reason verbatim plus a sentence. Never a
     // silent retry, and never a raw provider object.
-    const verbatim = err?.shortMessage ?? err?.message ?? String(err);
+    const verbatim = decodedRevert(err) ?? err?.shortMessage ?? err?.message ?? String(err);
     const status = /is not set|credentials|entity secret|api key/i.test(verbatim) ? 503 : 400;
     return {
       status,

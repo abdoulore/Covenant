@@ -97,11 +97,33 @@ export interface CreateResult extends WriteResult {
   policyId: string;
 }
 
+/**
+ * The vault surface this service calls, and every custom error it can revert with.
+ *
+ * The errors are not decoration. viem decodes a revert only against the ABI it was handed, so
+ * without them a refusal reaches the operator as `reverted with the following signature:
+ * 0x1f0c1db7` — which is `ConditionNotMet`, unreadably. The API's contract with the app is that a
+ * revert arrives verbatim plus a human sentence, and a bare selector honours neither half.
+ *
+ * A refusal is the most important thing this system does. It has to say what it refused.
+ */
 const vaultAbi = parseAbi([
   "function nextPolicyId() view returns (uint256)",
   "function release(uint256)",
   "function releaseWithProof(uint256 policyId, bytes proof) payable",
   "event PolicyCreated(uint256 indexed policyId, address indexed recipient, uint256 amount, uint8 payoutCurrency, uint32 destinationDomain, uint8 conditionType)",
+  "error ConditionNotMet(uint256 policyId)",
+  "error Underfunded(uint256 policyId, uint256 funded, uint256 required)",
+  "error PolicyNotPending(uint256 policyId, uint8 status)",
+  "error UnknownPolicy(uint256 policyId)",
+  "error UseReleasePeriod(uint256 policyId)",
+  "error UseReleaseWithProof(uint256 policyId)",
+  "error ConfidenceTooWide(uint256 policyId, uint256 conf, uint256 value, uint16 maxConfBps)",
+  "error CatchUpStale(uint256 policyId, uint64 nextDue)",
+  "error SweepBelowMin(uint256 policyId, uint256 slice, uint256 minSweep)",
+  "error PeriodNotDue(uint256 policyId, uint64 nextDue, uint256 nowTs)",
+  "error NotAnApprover(uint256 policyId, address caller)",
+  "error InsufficientFee(uint256 required, uint256 sent)",
 ]);
 
 const adapterAbi = parseAbi(["function quoteFee(bytes proof) view returns (uint256)"]);
