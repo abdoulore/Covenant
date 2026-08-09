@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Demonstrate the failure path onchain, with a captured transaction hash.
  *
  *   node --env-file=.env executor/scripts/failure-path.mjs
@@ -20,6 +20,7 @@ import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 import { executeContract } from "./lib/circle-tx.mjs";
+import { currentVaultAddress } from "./lib/vault-address.mjs";
 
 const ConditionType = { Timelock: 0, Approval: 1 };
 const PayoutCurrency = { USDC: 0, EURC: 1 };
@@ -35,7 +36,7 @@ const env = (n) => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_ADDRESS");
+const VAULT = currentVaultAddress();
 const RPC = env("ARC_TESTNET_RPC_URL");
 
 const arcTestnet = {
@@ -139,3 +140,4 @@ main().catch((err) => {
   console.error("\nFAILED:", err?.message ?? err);
   process.exit(1);
 });
+

@@ -10,6 +10,9 @@
     "test": "npm run test:contracts && npm run test:executor",
     "test:contracts": "forge test --root contracts",
     "test:executor": "npm test --workspace executor",
+    "test:count": "node scripts/check-test-count.mjs",
+    "verify:hashes": "node scripts/verify-hashes.mjs",
+    "typecheck": "tsc --noEmit -p executor/tsconfig.json && tsc --noEmit -p app/tsconfig.json",
     "build:contracts": "forge build --root contracts",
     "deploy": "cd contracts && forge script script/DeployPolicyVault.s.sol:DeployPolicyVault --rpc-url $ARC_TESTNET_RPC_URL --broadcast",
     "wallets": "node --env-file=.env executor/scripts/create-wallets.mjs",
@@ -20,13 +23,18 @@
     "canary": "npm exec --workspace executor -- tsx --env-file=../.env scripts/canary.ts",
     "demo:attestation": "npm exec --workspace executor -- tsx --env-file=../.env scripts/attestation-demo.ts",
     "demo:oracle": "npm exec --workspace executor -- tsx --env-file=../.env scripts/pyth-oracle-demo.ts",
+    "demo:oracle-pull": "npm exec --workspace executor -- tsx --env-file=../.env scripts/oracle-pull-demo.ts",
+    "demo:fail-closed": "npm exec --workspace executor -- tsx --env-file=../.env scripts/fail-closed-demo.ts",
     "demo:scheduling": "npm exec --workspace executor -- tsx --env-file=../.env scripts/scheduling-demo.ts",
     "demo:sweep": "npm exec --workspace executor -- tsx --env-file=../.env scripts/sweep-demo.ts",
     "gateway:authorize": "npm exec --workspace executor -- tsx --env-file=../.env scripts/gateway-authorize-delegate.ts",
     "demo:gateway": "npm exec --workspace executor -- tsx --env-file=../.env scripts/demo-gateway-funding.ts",
     "dashboard": "npm exec --workspace executor -- tsx --env-file=../.env src/dashboard/server.ts",
     "api": "npm exec --workspace executor -- tsx --env-file=../.env src/api/start.ts",
-    "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts"
+    "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts",
+    "v4:preflight": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-preflight.ts",
+    "v4:inventory": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-inventory.ts",
+    "v4:cancel": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-cancel.ts"
   },
   "engines": {
     "node": ">=20"

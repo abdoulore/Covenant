@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The canary: both policy archetypes, end to end, on live testnets.
  *
  *   npm run canary
@@ -30,6 +30,7 @@ import { toDecimalString } from "../src/legs/legs.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { ARC_DOMAIN, BASE_SEPOLIA_DOMAIN, chainFor } from "../src/config.js";
 import type { SettlementRecord } from "../src/types.js";
+import { currentVaultAddress } from "../src/api/vaults.js";
 
 // Same CJS workaround as CircleWalletProvider. See docs/VERIFICATIONS.md V16.
 const require = createRequire(import.meta.url);
@@ -47,7 +48,7 @@ const env = (n: string): string => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_ADDRESS") as `0x${string}`;
+const VAULT = currentVaultAddress();
 const RPC = env("ARC_TESTNET_RPC_URL");
 
 const arc = chainFor(ARC_DOMAIN);
@@ -258,3 +259,4 @@ main().catch((err) => {
   console.error("\nCANARY FAILED:", err?.message ?? err);
   process.exit(1);
 });
+

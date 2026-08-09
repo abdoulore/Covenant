@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Fund an Arc policy from USDC that starts on Base Sepolia, end to end, via Circle Gateway.
  *
  *   npm run demo:gateway
@@ -23,6 +23,7 @@ import { createLegRunner } from "../src/legs/createLegRunner.js";
 import { toDecimalString } from "../src/legs/legs.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { ARC_DOMAIN, chainFor } from "../src/config.js";
+import { currentVaultAddress } from "../src/api/vaults.js";
 
 const require = createRequire(import.meta.url);
 const { initiateDeveloperControlledWalletsClient } = require("@circle-fin/developer-controlled-wallets");
@@ -33,7 +34,7 @@ const env = (n: string): string => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_V3_ADDRESS") as `0x${string}`;
+const VAULT = currentVaultAddress();
 const RPC = env("ARC_TESTNET_RPC_URL");
 const TREASURY_ARC = env("TREASURY_WALLET_ADDRESS") as `0x${string}`;
 const AMOUNT = 30_000n; // 0.03 USDC, sourced from Base Sepolia (sized to the current unified balance)
@@ -89,7 +90,9 @@ async function main() {
   log(`gateway mint on Arc ${mintTx}, delivered ${delivered} base units${depositTx ? `, topped up via ${depositTx}` : ""}`);
 
   // 2. Create and fund a policy with that USDC. The vault pulls it via the normal deposit().
-  log("creating an approval policy on v3 and funding it with the Gateway-sourced USDC");
+  // Names the vault it actually resolved rather than a version baked into the string: this line
+  // said "v3" for one run after the target moved to v4, which is a log that lies quietly.
+  log(`creating an approval policy on ${VAULT} and funding it with the Gateway-sourced USDC`);
   const policyId = (await publicClient.readContract({ address: VAULT, abi: vaultAbi, functionName: "nextPolicyId" })) as bigint;
   const createTx = await send(
     treasury.walletId, VAULT,
@@ -139,3 +142,4 @@ main().catch((err) => {
   console.error("\nGATEWAY FUNDING DEMO FAILED:", err?.message ?? err);
   process.exit(1);
 });
+

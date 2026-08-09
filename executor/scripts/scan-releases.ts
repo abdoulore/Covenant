@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Verify EventWatcher against the live chain.
  *
  *   node --env-file=.env executor/scripts/scan-releases.ts
@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { EventWatcher } from "../src/chain/EventWatcher.js";
 import { CursorStore } from "../src/store/CursorStore.js";
 import { chainFor } from "../src/config.js";
+import { currentVaultAddress } from "../src/api/vaults.js";
 
 const env = (n: string): string => {
   const v = process.env[n];
@@ -33,13 +34,13 @@ const client = createPublicClient({
 
 const watcher = new EventWatcher({
   client,
-  vaultAddress: env("POLICY_VAULT_ADDRESS") as `0x${string}`,
+  vaultAddress: currentVaultAddress(),
   cursors: new CursorStore(join(process.cwd(), ".state", "scan-check-cursor.json")),
   deployBlock: BigInt(env("POLICY_VAULT_DEPLOY_BLOCK")),
 });
 
 const head = await client.getBlockNumber();
-console.log(`vault  ${env("POLICY_VAULT_ADDRESS")}`);
+console.log(`vault  ${currentVaultAddress()}`);
 console.log(`from   ${env("POLICY_VAULT_DEPLOY_BLOCK")}`);
 console.log(`head   ${head}  (${head - BigInt(env("POLICY_VAULT_DEPLOY_BLOCK"))} blocks to scan)\n`);
 
@@ -55,3 +56,4 @@ const count = await watcher.scanOnce(async (policy) => {
 });
 
 console.log(`${count} release(s) found in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+

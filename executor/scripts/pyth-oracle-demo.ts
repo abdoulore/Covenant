@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Oracle condition via Pyth, proven onchain end to end (permissionless oracle plan, Option 1).
  *
  *   npm run demo:oracle
@@ -28,6 +28,7 @@ import { createLegRunner } from "../src/legs/createLegRunner.js";
 import { toDecimalString } from "../src/legs/legs.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { ARC_DOMAIN, chainFor } from "../src/config.js";
+import { currentVaultAddress } from "../src/api/vaults.js";
 
 const require = createRequire(import.meta.url);
 const { initiateDeveloperControlledWalletsClient } = require("@circle-fin/developer-controlled-wallets");
@@ -42,7 +43,7 @@ const env = (n: string): string => {
   return v;
 };
 
-const VAULT = env("POLICY_VAULT_ADDRESS") as `0x${string}`;
+const VAULT = currentVaultAddress();
 const RPC = env("ARC_TESTNET_RPC_URL");
 const PYTH = env("ARC_PYTH_ADDRESS") as `0x${string}`;
 const WRAPPER = env("ARC_PYTH_WRAPPER_USDC") as `0x${string}`;
@@ -233,3 +234,4 @@ main().catch((err) => {
   console.error("\nPYTH ORACLE DEMO FAILED:", err?.message ?? err);
   process.exit(1);
 });
+
