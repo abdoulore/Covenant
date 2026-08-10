@@ -68,7 +68,7 @@ All figures below are from the v4 re-proof pass, run on 2026-08-09.
 | PolicyVault v4 deployment cost | 0.0797 USDC (v1 was 0.0294; cost grows with each condition type) |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 341, across contract and executor |
+| Automated tests | 347, across contract and executor |
 
 Deployed PolicyVault: [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) on Arc Testnet (chain id 5042002), carrying all six condition types. Two superseded deployments remain readable for their proofs: v3 at [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) and v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Each is a separate address because the vault is immutable. Full hashes, per-deployment, are in [docs/RESULTS.md](docs/RESULTS.md), which also records the known defects found so far.
 
