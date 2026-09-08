@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:prod": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@circle-fin/adapter-circle-wallets": "^1.4.3",

@@ -1,7 +1,10 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "buildCommand": "npm run build:api"
+  },
   "deploy": {
-    "startCommand": "npm run api",
+    "startCommand": "node --max-old-space-size=512 --env-file-if-exists=.env executor/dist/api/start.js",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

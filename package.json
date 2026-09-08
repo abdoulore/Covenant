@@ -32,6 +32,8 @@
     "demo:gateway": "npm exec --workspace executor -- tsx --env-file=../.env scripts/demo-gateway-funding.ts",
     "dashboard": "npm exec --workspace executor -- tsx --env-file-if-exists=../.env src/dashboard/server.ts",
     "api": "npm exec --workspace executor -- tsx --env-file-if-exists=../.env src/api/start.ts",
+    "build:api": "npm run build:prod --workspace executor",
+    "api:prod": "node --max-old-space-size=512 --env-file-if-exists=.env executor/dist/api/start.js",
     "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts",
     "v4:preflight": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-preflight.ts",
     "v4:inventory": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-inventory.ts",

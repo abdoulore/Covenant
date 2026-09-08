@@ -1,0 +1,15 @@
+{
+  // Production build: source only.
+  //
+  // The default tsconfig includes test/ so the editor and `npm run typecheck` see the whole
+  // workspace. Emitting tests into dist/ would ship vitest imports into a runtime image that has no
+  // devDependencies installed, so this narrows the input to src/ and turns off the extras nothing
+  // reads at runtime.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "test"]
+}
