@@ -545,8 +545,23 @@ document.getElementById("conds").innerHTML = TYPES.map((t) => `
     <div class="proof"><span class="mono">${t.short}</span> ${t.note} <svg class="ic arw"><use href="#i-arrow"/></svg></div>
   </a>`).join("");
 
-const FEED = "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
-const HERMES = `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${FEED}&parsed=true`;
+/**
+ * The live price comes from the Covenant API, not from Pyth directly.
+ *
+ * Hermes stopped being keyless in the Pyth Core upgrade and now answers 401 without an API key.
+ * A key cannot live in this file: it is a static page and anyone can read its source, so the key
+ * would be published the moment it shipped. The API already holds one server-side to build the
+ * depeg panel and to sign a releaseWithProof, and it serves the result on a public read, so this
+ * page asks it rather than keeping a second copy of a secret it has no safe way to store.
+ *
+ * Named absolutely, because in production the page and the API sit on different hosts and the API's
+ * CORS origin is pinned to this page's. The cost is that a local preview of dist/ is not that
+ * origin, so the browser blocks the call and the panel shows its offline fallback. That is the
+ * right trade: the fallback still states the release rule and links to the onchain release, and it
+ * is better than a landing page that only works on someone's laptop.
+ */
+const API_BASE = "https://covenantz.up.railway.app";
+const PRICE_URL = `${API_BASE}/api/state`;
 let lastPublish = null;
 const agoUnix = (sec) => { const s = Math.max(0, Math.floor(Date.now() / 1000 - sec)); return s < 90 ? s + "s ago" : Math.floor(s / 60) + "m ago"; };
 
@@ -576,12 +591,13 @@ const fallback = () => `<div class="anchor fallback">
 </div>`;
 async function loadPrice() {
   try {
-    const res = await fetch(HERMES, { cache: "no-store" });
+    const res = await fetch(PRICE_URL, { cache: "no-store" });
     if (!res.ok) throw 0;
-    const p = (await res.json()).parsed?.[0]?.price;
-    if (!p) throw 0;
-    lastPublish = p.publish_time;
-    document.getElementById("anchor").innerHTML = anchor({ price: Number(p.price) * 10 ** p.expo, publishTime: p.publish_time });
+    // The API has already normalised the feed's integer and exponent into a decimal price.
+    const o = (await res.json()).oracle;
+    if (!o || typeof o.price !== "number") throw 0;
+    lastPublish = o.publishTime;
+    document.getElementById("anchor").innerHTML = anchor({ price: o.price, publishTime: o.publishTime });
   } catch { lastPublish = null; document.getElementById("anchor").innerHTML = fallback(); }
 }
 loadPrice();

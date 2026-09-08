@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { createPublicClient, http, type PublicClient } from "viem";
 import { chainFor, ARC_DOMAIN } from "../config.js";
 import { labelsFor, VAULTS, type VaultLabel, type VaultSurface } from "./vaults.js";
+import { hermesConfig, hermesAuthMessage } from "../oracle/HermesPythClient.js";
 
 // Index is the onchain enum value. Append-only, so a v2 or v3 policy decodes the same here.
 const CONDITION = ["Timelock", "Approval", "Attestation", "Oracle", "Schedule", "OraclePull"];
@@ -193,17 +194,29 @@ async function readSettlements(deps: ReadModelDeps) {
 }
 
 async function readOracle(deps: ReadModelDeps) {
-  // The depeg panel is the money shot, so tolerate a flaky Hermes call rather than showing "unavailable".
+  // The depeg panel is the money shot, so tolerate a flaky Hermes call rather than showing
+  // "unavailable". Retrying a 401 is not tolerance though, it is three times the latency for the
+  // same refusal: Hermes now requires an API key, and no number of attempts conjures one. So an
+  // auth failure returns immediately and says so, and only genuine flakiness is retried.
+  const cfg = hermesConfig();
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${deps.feedId}&parsed=true`);
+      const res = await fetch(
+        `${cfg.baseUrl}/v2/updates/price/latest?ids[]=${deps.feedId}&parsed=true`,
+        { headers: cfg.headers },
+      );
+      if (res.status === 401 || res.status === 403) {
+        console.warn(`readOracle: ${hermesAuthMessage(res.status, cfg)}`);
+        return null;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const j: any = await res.json();
       const p = j.parsed?.[0]?.price;
       if (!p) throw new Error("no price");
       return { pair: "USDC/USD", price: Number(p.price) * 10 ** p.expo, conf: Number(p.conf) * 10 ** p.expo, publishTime: p.publish_time, decimals: -p.expo };
-    } catch {
-      if (attempt < 3) await new Promise((r) => setTimeout(r, 700));
+    } catch (err) {
+      if (attempt === 3) console.warn(`readOracle: giving up after ${attempt} attempts: ${err instanceof Error ? err.message : String(err)}`);
+      else await new Promise((r) => setTimeout(r, 700));
     }
   }
   return null;
