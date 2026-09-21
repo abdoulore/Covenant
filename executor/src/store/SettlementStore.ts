@@ -5,9 +5,17 @@
  * in event-driven payout systems, so the rule here is claim before work: a policy is recorded as
  * claimed before any funds move, and a claim that already exists is never re-processed.
  *
- * Backed by a JSON file, which is adequate for the canary and honest about its limits. It assumes
- * a single executor process. Running two against one store would race, and the fix is a real
- * database with a unique constraint on policyId, not a lock bolted onto this file.
+ * Two implementations share one contract, SettlementStoreLike:
+ *
+ * - SettlementStore, here: a JSON file per demo script. Kept for the demo scripts and the receipts
+ *   they already wrote. New records are keyed with the vault; records written before D15 keep
+ *   their old `policyId:periodIndex` key, and tryClaim handles them without guessing their vault.
+ *   Single-process only, so it never backs the keeper.
+ * - PostgresSettlementStore: keyed on (vault, policy id, period) with the database enforcing the
+ *   uniqueness. What the keeper uses.
+ *
+ * The store owns its key format. The engine asks `keyFor` rather than building a key itself, so an
+ * engine running against either store cannot drift from the key that store actually enforces.
  */
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -47,13 +55,42 @@ export function settlementKey(policyId: string, periodIndex: number): string {
   return `${policyId}:${periodIndex}`;
 }
 
-export class SettlementStore {
+/** What identifies one settlement. Vault is optional only for receipts written before D15. */
+export interface SettlementIdentity {
+  vault?: string | undefined;
+  policyId: string;
+  periodIndex: number;
+}
+
+/** The contract the engine depends on. Both stores implement it. */
+export interface SettlementStoreLike {
+  /** The key this store enforces uniqueness on. Callers never build keys themselves. */
+  keyFor(id: SettlementIdentity): string;
+  tryClaim(policy: ReleasedPolicy, legs: LegKind[], releaseExplorerUrl: string): Promise<boolean>;
+  get(key: string): Promise<SettlementRecord | undefined>;
+  all(): Promise<SettlementRecord[]>;
+  inProgress(): Promise<SettlementRecord[]>;
+  updateLeg(key: string, kind: LegKind, patch: Partial<SettlementLeg>): Promise<void>;
+  markSettled(key: string): Promise<void>;
+  markFailed(key: string, failedLeg: LegKind, error: string): Promise<void>;
+  reopen(key: string): Promise<void>;
+}
+
+export class SettlementStore implements SettlementStoreLike {
   private data: StoreShape = structuredClone(EMPTY);
   private loaded = false;
   /** Serializes writes so concurrent leg updates cannot interleave a read-modify-write. */
   private writeChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly filePath: string) {}
+
+  /**
+   * Vault-scoped for every record that has a vault, which is every record written since D15. A
+   * pre-D15 record has none, keeps the key it was written under, and stays addressable by it.
+   */
+  keyFor(id: SettlementIdentity): string {
+    return id.vault ? `${id.vault.toLowerCase()}:${id.policyId}:${id.periodIndex}` : settlementKey(id.policyId, id.periodIndex);
+  }
 
   static defaultPath(): string {
     return join(process.cwd(), ".state", "settlements.json");
@@ -81,10 +118,21 @@ export class SettlementStore {
    */
   async tryClaim(policy: ReleasedPolicy, legs: LegKind[], releaseExplorerUrl: string): Promise<boolean> {
     await this.load();
-    const key = settlementKey(policy.policyId, policy.periodIndex);
+    const key = this.keyFor(policy);
     if (this.data.settlements[key]) return false;
 
+    /**
+     * A record written before D15 sits under `policyId:periodIndex` with no vault, and its key alone
+     * cannot say which deployment it came from. Its release transaction can: a transaction hash
+     * names one release, on one vault. So an old record blocks this claim only when it is the same
+     * release, which is a genuine replay. A different transaction under the same old key is a
+     * different vault's policy that happens to share a number, and refusing it is the D15 defect.
+     */
+    const legacy = this.data.settlements[settlementKey(policy.policyId, policy.periodIndex)];
+    if (legacy && !legacy.vault && legacy.releaseTxHash.toLowerCase() === policy.releaseTxHash.toLowerCase()) return false;
+
     const record: SettlementRecord = {
+      ...(policy.vault ? { vault: policy.vault.toLowerCase() } : {}),
       policyId: policy.policyId,
       periodIndex: policy.periodIndex,
       status: "in_progress",

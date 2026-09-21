@@ -27,7 +27,7 @@ flowchart TB
 ```
 
 - **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports six release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, a price feed crossing a threshold, a schedule, and a signed price proof verified at release. Release reverts if the condition is not met.
-- **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written before any funds move, so a restart never pays twice.
+- **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written to Postgres before any funds move, keyed by vault, so neither a restart nor a second vault deployment can make it pay twice or skip a payment.
 - **Wallets** are Circle developer-controlled wallets for the treasury, executor, and recipient roles, behind one interface so a later move to user-controlled wallets touches no settlement logic.
 
 ## Why this needs Arc
@@ -68,7 +68,7 @@ All figures below are from the v4 re-proof pass, run on 2026-08-09.
 | PolicyVault v4 deployment cost | 0.0797 USDC (v1 was 0.0294; cost grows with each condition type) |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 355, across contract and executor |
+| Automated tests | 374, across contract and executor |
 
 Deployed PolicyVault: [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) on Arc Testnet (chain id 5042002), carrying all six condition types. Two superseded deployments remain readable for their proofs: v3 at [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) and v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Each is a separate address because the vault is immutable. Full hashes, per-deployment, are in [docs/RESULTS.md](docs/RESULTS.md), which also records the known defects found so far.
 
@@ -108,9 +108,12 @@ The operator app, which creates, funds, approves, and releases policies through 
 
 ```bash
 npm run api                 # the write API. Needs OPERATOR_SECRET; see .env.example
+COVENANT_KEEPER=on npm run api  # the same, and also settle releases as they happen; needs DATABASE_URL
 npm --prefix app run dev    # the operator app, proxying /api to the API above
 npm --prefix app run build  # production bundle, gated on the bundle secret check
 ```
+
+The keeper records every settlement in Postgres, keyed on the vault, the policy id, and the period, so the database itself refuses to pay the same release twice. Policy ids restart at zero on each vault deployment, so the vault has to be part of that key; without it, a policy on a new vault would look like one already paid. The keeper will not start without `DATABASE_URL`.
 
 The API refuses to start in a deployed environment without an operator secret and a pinned CORS origin. For a local run set `COVENANT_ENV=dev`. The app talks only to the API: it holds no keys and no provider, and `npm --prefix app run build` fails if any secret material reaches the bundle.
 

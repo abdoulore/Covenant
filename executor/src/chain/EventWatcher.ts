@@ -145,6 +145,9 @@ export class EventWatcher {
     chainFor(destinationDomain);
 
     return {
+      // From the log itself, not from configuration: the vault that emitted the event is the one
+      // whose numbering this policy id belongs to.
+      vault: (log.address ?? this.vaultAddress).toLowerCase(),
       policyId: args.policyId.toString(),
       periodIndex: Number(args.periodIndex),
       recipient: args.recipient,

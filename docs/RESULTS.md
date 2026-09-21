@@ -237,7 +237,7 @@ The Oracle condition's staleness check reverted rather than failing closed when 
 
 It fails in the safe direction. It cannot release funds that should not be released; it fails loud rather than quiet. **Fixed in v4 and proven above in row 8.** The v2 and v3 oracle proofs recorded below remain valid: they ran against a fresh feed, and the defect only affects a future-dated one.
 
-### Settlement store keys carry no vault, all deployments, not yet fixed
+### Settlement store keys carried no vault, all deployments, fixed
 
 The executor keys a settlement record as `policyId:periodIndex`. That key has no vault component, the store persists across deployments, and **every deployment restarts policy ids at zero**. A single store file therefore holds records from several vaults with no way to tell them apart from the key.
 
@@ -245,7 +245,23 @@ No settlement has been affected. Ids have not overlapped within any one file, wh
 
 This is the same class of mistake as the operator app treating a policy id as unique across vaults, surviving in the last place it was not looked for. It was found while generating this document from source rather than from terminal output, because the generator initially listed settlement records from all three deployments as if they were v4's.
 
-**Trigger, written down so it does not drift: this must be fixed before any v5 deployment.** The fix is to include the vault in the key, matching what the vault registry now does everywhere else, with a migration for existing records. Tracked in DECISIONS D15.
+The trigger was written down as "before any v5 deployment", and it was met: no v5 address exists.
+
+**Fixed.** The keeper now records settlements in Postgres, with the vault, the policy id, and the period as the primary key. Claiming a release is an insert that either creates the row or does nothing, so the database refuses a duplicate, rather than a check in one process's memory, and two keepers sharing the store cannot both pay. The keeper will not start without a database: falling back to the old store would bring the defect straight back.
+
+The demo scripts keep their JSON files, now keyed with the vault for every new record. Old records have no vault, so no migration could have added one honestly. Instead, an old record blocks a new claim only when it holds the same release transaction, because a transaction hash names exactly one release on one vault. The same policy number on another vault is a different transaction, and it gets paid.
+
+The regression is tested end to end against a real Postgres: v5 policy 3 is paid after v4 policy 3 has already been paid, and a genuine replay of the v5 release is still refused. CI runs that suite on every push, and fails, rather than skips, if its database is missing.
+
+Proven live on v4, with the settlement read back from the database:
+
+| Step | Transaction |
+|---|---|
+| Policy 24 created | [`0xa6f35d22…f7223603`](https://testnet.arcscan.app/tx/0xa6f35d229f2e03123fa4de759368d47f7daba45d05af63d936387f04f7223603) |
+| Released | [`0xcb9e7475…ba56f3e5`](https://testnet.arcscan.app/tx/0xcb9e7475638a9c76ac3731dc2564c6b16d178639daae55a5b3c1a962ba56f3e5) |
+| Paid by the keeper, 10.8 s after release | [`0x705a5b11…a3b84a7d`](https://testnet.arcscan.app/tx/0x705a5b11891511d1c104b3c75959b61d667fc4982a76d84e8d065c2ea3b84a7d) |
+
+Stored under the key `0x3b507607ba48a65587a9a6136c36cd2f1132d498:24:0`. Tracked in DECISIONS D15.
 
 ---
 

@@ -25,6 +25,7 @@ const wallets: WalletProvider = {
 
 function release(over: Partial<ReleasedPolicy> = {}): ReleasedPolicy {
   return {
+    vault: "0x3b507607ba48a65587a9a6136c36cd2f1132d498",
     policyId: "1",
     periodIndex: 0,
     recipient: "0xrecipient",
@@ -122,7 +123,7 @@ describe("SettlementEngine", () => {
 
     expect(ran).toEqual([]);
     // No half-created record left behind for an impossible policy.
-    expect(await store.get(settlementKey("1", 0))).toBeUndefined();
+    expect(await store.get(store.keyFor(release()))).toBeUndefined();
   });
 
   it("never processes the same policy twice", async () => {
@@ -215,12 +216,12 @@ describe("SettlementEngine", () => {
   it("resumes an interrupted settlement without repeating completed legs", async () => {
     const path = await tmpFile();
     const policy = release({ destinationDomain: BASE_SEPOLIA_DOMAIN });
-    const key = settlementKey(policy.policyId, policy.periodIndex);
 
     // Build the exact state a crash leaves behind: claimed, bridge done, payout still pending,
     // settlement still in_progress. Written through the store's own API so the test cannot drift
     // from how the engine actually persists things.
     const crashed = new SettlementStore(path);
+    const key = crashed.keyFor(policy);
     expect(await crashed.tryClaim(policy, ["bridge", "payout"], "https://x/release")).toBe(true);
     await crashed.updateLeg(key, "bridge", {
       status: "succeeded",
@@ -291,9 +292,9 @@ describe("SettlementEngine", () => {
   it("resumes with the converted amount rather than the original", async () => {
     const path = await tmpFile();
     const policy = release({ payoutCurrency: "EURC", amount: "500000" });
-    const key = settlementKey(policy.policyId, policy.periodIndex);
 
     const crashed = new SettlementStore(path);
+    const key = crashed.keyFor(policy);
     await crashed.tryClaim(policy, ["fx", "payout"], "https://x/release");
     await crashed.updateLeg(key, "fx", {
       status: "succeeded",
@@ -350,7 +351,7 @@ describe("SettlementEngine", () => {
     const record = await engineWith(store, runLeg).settle(release());
 
     expect(record?.status).toBe("settled");
-    const reloaded = await new SettlementStore((store as unknown as { filePath: string }).filePath).get(settlementKey("1", 0));
+    const reloaded = await new SettlementStore((store as unknown as { filePath: string }).filePath).get(store.keyFor(release()));
     expect(reloaded?.legs[0]?.resumeState).toEqual({ blockNumber: "123", nested: { fee: "456" } });
   });
 

@@ -13,6 +13,14 @@ export type ConditionType = "Timelock" | "Approval";
 
 /** A PolicyReleased event, decoded. This is the executor's input. */
 export interface ReleasedPolicy {
+  /**
+   * The PolicyVault that emitted this release, lowercase. Part of a settlement's identity.
+   *
+   * Every vault deployment numbers its policies from zero, so a policy id alone names a different
+   * policy on each deployment. A store keyed without the vault would see v5 policy 3 as the
+   * already-paid v4 policy 3, report "already claimed", and skip a real payment. See D15.
+   */
+  vault: string;
   policyId: string;
   /** 0 for a single-shot release, 1, 2, 3... for each period of a recurring policy. */
   periodIndex: number;
@@ -83,6 +91,11 @@ export interface SettlementLeg {
 export type SettlementStatus = "in_progress" | "settled" | "failed";
 
 export interface SettlementRecord {
+  /**
+   * The vault the release came from. Optional only because receipts written before D15 never
+   * recorded it; every record the keyed store writes has one.
+   */
+  vault?: string;
   policyId: string;
   /** The period this settlement is for. 0 for single-shot. Part of the store key. */
   periodIndex: number;

@@ -12,7 +12,7 @@
  */
 
 import { chainFor, planLegs } from "./config.js";
-import { settlementKey, type SettlementStore } from "./store/SettlementStore.js";
+import type { SettlementStoreLike } from "./store/SettlementStore.js";
 import type { LegKind, ReleasedPolicy, SettlementRecord } from "./types.js";
 import type { WalletProvider } from "./wallet/WalletProvider.js";
 import type { LegResult } from "./legs/legs.js";
@@ -30,7 +30,7 @@ export type LegRunner = (
 ) => Promise<LegResult>;
 
 export interface SettlementEngineOptions {
-  store: SettlementStore;
+  store: SettlementStoreLike;
   wallets: WalletProvider;
   runLeg: LegRunner;
   maxAttemptsPerLeg?: number;
@@ -40,7 +40,7 @@ export interface SettlementEngineOptions {
 }
 
 export class SettlementEngine {
-  private readonly store: SettlementStore;
+  private readonly store: SettlementStoreLike;
   private readonly wallets: WalletProvider;
   private readonly runLeg: LegRunner;
   private readonly maxAttempts: number;
@@ -68,7 +68,7 @@ export class SettlementEngine {
     // planLegs also validates the route, so an impossible combination fails before the claim and
     // does not leave an in_progress record behind.
     const legs = planLegs(policy.payoutCurrency, policy.destinationDomain);
-    const key = settlementKey(policy.policyId, policy.periodIndex);
+    const key = this.store.keyFor(policy);
 
     const claimed = await this.store.tryClaim(
       policy,
@@ -103,7 +103,7 @@ export class SettlementEngine {
   async resumeInterrupted(): Promise<number> {
     const stuck = await this.store.inProgress();
     for (const record of stuck) {
-      const key = settlementKey(record.policyId, record.periodIndex);
+      const key = this.store.keyFor(record);
       this.log(`policy ${record.policyId}: resuming, interrupted after ${completedLegs(record)}`);
       const remaining = record.legs.filter((l) => l.status !== "succeeded").map((l) => l.kind);
 
@@ -135,7 +135,7 @@ export class SettlementEngine {
     policy: ReleasedPolicy,
     amountBaseUnits: string,
   ): Promise<LegResult | undefined> {
-    const key = settlementKey(policy.policyId, policy.periodIndex);
+    const key = this.store.keyFor(policy);
     const startedAt = new Date().toISOString();
     await this.store.updateLeg(key, kind, { startedAt });
 
@@ -219,6 +219,8 @@ function completedLegs(record: SettlementRecord): string {
 /** Rebuild the engine's input from a stored record, for resumption after a restart. */
 function policyFrom(record: SettlementRecord): ReleasedPolicy {
   return {
+    // Empty only for a pre-D15 JSON receipt, whose store keys without the vault anyway.
+    vault: record.vault ?? "",
     policyId: record.policyId,
     periodIndex: record.periodIndex,
     recipient: record.recipient,

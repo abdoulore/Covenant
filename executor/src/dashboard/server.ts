@@ -30,6 +30,8 @@ const deps = readModelFromOptions({
   v2Address: process.env.POLICY_VAULT_ADDRESS,
   feedId: process.env.PYTH_USDC_USD_FEED_ID ?? "",
   stateDir: join(process.cwd(), ".state"),
+  // The monitor carries the whole record: the keeper's receipts as well as the archive.
+  databaseUrl: process.env.DATABASE_URL,
   // The monitor carries the whole record, including superseded deployments and their proofs.
   surface: "monitor",
 });

@@ -7,7 +7,7 @@ import { AppKit } from "@circle-fin/app-kit";
 import { join } from "node:path";
 import { EventWatcher } from "../chain/EventWatcher.js";
 import { CursorStore } from "../store/CursorStore.js";
-import { SettlementStore } from "../store/SettlementStore.js";
+import { PostgresSettlementStore } from "../store/PostgresSettlementStore.js";
 import { SettlementEngine } from "../SettlementEngine.js";
 import { createLegRunner } from "../legs/createLegRunner.js";
 import { CircleWalletProvider } from "../wallet/CircleWalletProvider.js";
@@ -16,8 +16,10 @@ import { currentVaultAddress } from "../api/vaults.js";
 import { coldStartBlock, createKeeper, type Keeper } from "./Keeper.js";
 
 export interface KeeperEnvOptions {
-  /** Where the cursor and settlement records live. Backed by a volume in a deployed run. */
+  /** Where the scan cursor lives. Settlement records live in Postgres. */
   stateDir: string;
+  /** Postgres holding the settlement records. Required: see keeperFromEnv. */
+  databaseUrl: string | undefined;
   rpcUrl: string;
   log?: (message: string) => void;
   pollIntervalMs?: number;
@@ -26,13 +28,20 @@ export interface KeeperEnvOptions {
 /**
  * Build the keeper from the environment.
  *
- * The settlement store is named `keeper-settlements.json` because the read model unions every
- * `*-settlements.json` in the state directory and tags each record with the file it came from. A
- * receipt this process produced therefore shows up in the app labelled `keeper`, distinguishable
- * from the demo-script runs that produced the archive on a developer's machine.
+ * Settlement records go to Postgres, keyed on (vault, policy, period). There is deliberately no
+ * fallback to the JSON store when DATABASE_URL is missing: that store keys without the vault, so a
+ * keeper running on it would reintroduce the exact collision D15 removed, where a policy on a new
+ * vault is mistaken for an already-paid one and silently skipped. Refusing to start is the safe
+ * failure; the API catches it and keeps serving reads.
  */
 export async function keeperFromEnv(opts: KeeperEnvOptions): Promise<Keeper> {
   const log = opts.log ?? ((m: string) => console.log(m));
+  if (!opts.databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is not set. The keeper stores settlements in Postgres, keyed by vault, and will " +
+        "not fall back to the JSON store, whose key has no vault (D15).",
+    );
+  }
   const arc = chainFor(ARC_DOMAIN);
 
   const client = createPublicClient({
@@ -45,7 +54,9 @@ export async function keeperFromEnv(opts: KeeperEnvOptions): Promise<Keeper> {
 
   const wallets = CircleWalletProvider.fromEnv();
   const cursors = new CursorStore(join(opts.stateDir, "keeper-cursor.json"));
-  const store = new SettlementStore(join(opts.stateDir, "keeper-settlements.json"));
+  const store = new PostgresSettlementStore({ connectionString: opts.databaseUrl });
+  await store.migrate();
+  log("keeper: settlement store is Postgres, keyed by vault, policy, and period");
 
   const engine = new SettlementEngine({
     store,

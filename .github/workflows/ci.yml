@@ -9,6 +9,21 @@ jobs:
   verify:
     runs-on: ubuntu-latest
 
+    # A throwaway Postgres for the settlement-store suite (D15). That suite tests the database
+    # refusing a duplicate claim, which only a real database can show. Nothing persists past the run.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       # Public, keyless endpoints, the same ones .env.example documents. The checks below only read.
       ARC_TESTNET_RPC_URL: https://arc-testnet.drpc.org
@@ -42,6 +57,9 @@ jobs:
 
       - name: Executor suite
         run: npm run test:executor
+        env:
+          # Local to the runner, so no TLS. The suite fails rather than skips in CI without this.
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
       - name: Typecheck
         run: npm run typecheck

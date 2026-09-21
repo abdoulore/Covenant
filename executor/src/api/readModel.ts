@@ -15,6 +15,8 @@ import { createPublicClient, http, type PublicClient } from "viem";
 import { chainFor, ARC_DOMAIN } from "../config.js";
 import { labelsFor, VAULTS, type VaultLabel, type VaultSurface } from "./vaults.js";
 import { hermesConfig, hermesAuthMessage } from "../oracle/HermesPythClient.js";
+import { PostgresSettlementStore } from "../store/PostgresSettlementStore.js";
+import type { SettlementStoreLike } from "../store/SettlementStore.js";
 
 // Index is the onchain enum value. Append-only, so a v2 or v3 policy decodes the same here.
 const CONDITION = ["Timelock", "Approval", "Attestation", "Oracle", "Schedule", "OraclePull"];
@@ -63,6 +65,8 @@ export interface ReadModelDeps {
   vaults: VaultRef[];
   feedId: string;
   stateDir: string;
+  /** The keeper's settlement store, when a database is configured. Read-only from here. */
+  settlements?: Pick<SettlementStoreLike, "all" | "keyFor"> | undefined;
 }
 
 export interface ReadModelOptions {
@@ -72,6 +76,8 @@ export interface ReadModelOptions {
   v2Address?: string | undefined;
   feedId: string;
   stateDir: string;
+  /** Postgres holding the keeper's receipts. Optional: without it only the JSON archive is shown. */
+  databaseUrl?: string | undefined;
   /**
    * Which surface is asking. The monitor shows every deployment; the operator app shows only what
    * an operator can act on plus the one it is draining. See vaults.ts.
@@ -96,7 +102,10 @@ export function readModelFromOptions(opts: ReadModelOptions): ReadModelDeps {
     { label: "v2", address: opts.v2Address, abi: policyAbi(BASE) },
   ].filter((v) => v.address && listed.has(v.label as VaultLabel)) as VaultRef[];
 
-  return { client, vaults, feedId: opts.feedId || DEFAULT_FEED, stateDir: opts.stateDir };
+  // One store, and so one connection pool, per process. Built here rather than per read.
+  const settlements = opts.databaseUrl ? new PostgresSettlementStore({ connectionString: opts.databaseUrl }) : undefined;
+
+  return { client, vaults, feedId: opts.feedId || DEFAULT_FEED, stateDir: opts.stateDir, settlements };
 }
 
 /**
@@ -169,24 +178,42 @@ async function readPolicies(deps: ReadModelDeps) {
   return out;
 }
 
+/** One receipt as the app shows it, whichever store it came from. */
+function receiptView(key: string, source: string, r: any) {
+  const payout = r.legs?.find((l: any) => l.txHash);
+  return {
+    key, source, vault: r.vault, policyId: r.policyId, periodIndex: r.periodIndex,
+    status: r.status, recipient: r.recipient, amount: r.amount, payoutCurrency: r.payoutCurrency,
+    destinationDomain: r.destinationDomain,
+    release: { txHash: r.releaseTxHash, url: r.releaseExplorerUrl, at: r.startedAt },
+    payout: payout ? { txHash: payout.txHash, url: payout.explorerUrl, at: payout.completedAt } : null,
+    custodyGapMs: r.custodyGapMs ?? r.durationMs, legs: r.legs?.map((l: any) => ({ kind: l.kind, status: l.status, txHash: l.txHash, url: l.explorerUrl })),
+  };
+}
+
+/**
+ * Receipts from both places they live: the keeper's Postgres store, and the JSON archive the demo
+ * scripts wrote before D15. A database that cannot be reached costs its own receipts, not the page:
+ * the archive and the rest of the state still render.
+ */
 async function readSettlements(deps: ReadModelDeps) {
   const out: any[] = [];
+
+  if (deps.settlements) {
+    try {
+      for (const r of await deps.settlements.all()) out.push(receiptView(deps.settlements.keyFor(r), "keeper", r));
+    } catch (err) {
+      console.warn(`readSettlements: keeper store unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   let files: string[] = [];
-  try { files = (await readdir(deps.stateDir)).filter((f) => f.endsWith("-settlements.json")); } catch { return out; }
+  try { files = (await readdir(deps.stateDir)).filter((f) => f.endsWith("-settlements.json")); } catch { files = []; }
   for (const file of files) {
     try {
       const data = JSON.parse(await readFile(join(deps.stateDir, file), "utf8"));
       for (const key of Object.keys(data.settlements ?? {})) {
-        const r = data.settlements[key];
-        const payout = r.legs?.find((l: any) => l.txHash);
-        out.push({
-          key, source: file.replace("-settlements.json", ""), policyId: r.policyId, periodIndex: r.periodIndex,
-          status: r.status, recipient: r.recipient, amount: r.amount, payoutCurrency: r.payoutCurrency,
-          destinationDomain: r.destinationDomain,
-          release: { txHash: r.releaseTxHash, url: r.releaseExplorerUrl, at: r.startedAt },
-          payout: payout ? { txHash: payout.txHash, url: payout.explorerUrl, at: payout.completedAt } : null,
-          custodyGapMs: r.custodyGapMs ?? r.durationMs, legs: r.legs?.map((l: any) => ({ kind: l.kind, status: l.status, txHash: l.txHash, url: l.explorerUrl })),
-        });
+        out.push(receiptView(key, file.replace("-settlements.json", ""), data.settlements[key]));
       }
     } catch { /* skip a malformed store file */ }
   }

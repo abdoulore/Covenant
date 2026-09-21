@@ -33,6 +33,7 @@ const readDeps = readModelFromOptions({
   v2Address: process.env.POLICY_VAULT_ADDRESS,
   feedId: process.env.PYTH_USDC_USD_FEED_ID ?? "",
   stateDir,
+  databaseUrl: process.env.DATABASE_URL,
   // The operator app is an operational surface: it lists what can be acted on, plus the deployment
   // being drained. v2 is history and lives in the monitor. See vaults.ts.
   surface: "app",
@@ -67,7 +68,7 @@ server.listen(config.port, () => {
  */
 if (/^(1|true|on|yes)$/i.test(process.env.COVENANT_KEEPER ?? "")) {
   const { keeperFromEnv } = await import("../keeper/keeperFromEnv.js");
-  keeperFromEnv({ stateDir, rpcUrl: process.env.ARC_TESTNET_RPC_URL ?? "" })
+  keeperFromEnv({ stateDir, databaseUrl: process.env.DATABASE_URL, rpcUrl: process.env.ARC_TESTNET_RPC_URL ?? "" })
     .then(async (keeper) => {
       await keeper.start();
       for (const signal of ["SIGTERM", "SIGINT"] as const) {

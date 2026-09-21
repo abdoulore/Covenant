@@ -4,7 +4,7 @@ import type { ReleasedPolicy, SettlementRecord } from "../src/types.js";
 
 function released(policyId: string): ReleasedPolicy {
   return {
-    policyId, periodIndex: 0, recipient: `0x${"1".repeat(40)}`, amount: "100000",
+    vault: "0x3b507607ba48a65587a9a6136c36cd2f1132d498", policyId, periodIndex: 0, recipient: `0x${"1".repeat(40)}`, amount: "100000",
     payoutCurrency: "USDC", destinationDomain: 26, executor: `0x${"2".repeat(40)}`,
     releaseTxHash: `0x${"a".repeat(64)}`, releaseBlockNumber: 1n,
   };
