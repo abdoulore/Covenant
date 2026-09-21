@@ -75,6 +75,7 @@ export async function keeperFromEnv(opts: KeeperEnvOptions): Promise<Keeper> {
     // Only consulted when no cursor exists yet. See coldStartBlock for why this is the head.
     deployBlock: await coldStartBlock(() => client.getBlockNumber(), log),
     confirmations: 2n,
+    log,
     ...(opts.pollIntervalMs === undefined ? {} : { pollIntervalMs: opts.pollIntervalMs }),
   });
 

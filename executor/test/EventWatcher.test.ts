@@ -3,7 +3,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chunkRange, CursorStore } from "../src/store/CursorStore.js";
-import { EventWatcher, POLICY_RELEASED_TOPIC } from "../src/chain/EventWatcher.js";
+import { classifyLogsError, EventWatcher, POLICY_RELEASED_TOPIC } from "../src/chain/EventWatcher.js";
 import type { ReleasedPolicy } from "../src/types.js";
 
 const tmpFile = async (name: string) => join(await mkdtemp(join(tmpdir(), "covenant-")), name);
@@ -272,5 +272,118 @@ describe("EventWatcher", () => {
         async () => {},
       ),
     ).rejects.toThrow(/No chain configured for CCTP domain 999/);
+  });
+});
+
+/** An RPC error shaped the way viem reports one: the provider's words land in `details`. */
+function rpcError(details: string, shortMessage = "RPC Request failed.") {
+  return Object.assign(new Error(shortMessage), { details, shortMessage });
+}
+
+describe("classifyLogsError", () => {
+  it("reads drpc's refusal as a range problem", () => {
+    expect(classifyLogsError(rpcError("ranges over 10000 blocks are not supported on free plan"))).toBe("range");
+  });
+
+  /** Circle's RPC words a rate limit as a limit being exceeded. Shrinking would make it worse. */
+  it("reads Circle's throttling as a rate limit, not a range problem", () => {
+    expect(classifyLogsError(rpcError("rate limit exceeded", "Request exceeds defined limit."))).toBe("rate");
+  });
+
+  it("recognises a result-count cap as a range problem", () => {
+    expect(classifyLogsError(rpcError("query returned more than 10000 results"))).toBe("range");
+  });
+
+  it("finds the provider's words in a nested cause", () => {
+    const outer = Object.assign(new Error("outer"), { cause: rpcError("ranges over 100 blocks are not supported") });
+    expect(classifyLogsError(outer)).toBe("range");
+  });
+
+  it("leaves anything else alone", () => {
+    expect(classifyLogsError(new Error("socket hang up"))).toBe("other");
+  });
+});
+
+/**
+ * The stall this guards against: drpc cut its limit to about 100 blocks, and a watcher asking for a
+ * fixed 10,000 after any pause had its catch-up refused and retried unchanged, forever.
+ */
+describe("EventWatcher against a provider with a smaller limit than it expects", () => {
+  /** Serves up to `limit` blocks per query and refuses anything larger, the way drpc does. */
+  function cappedClient(head: bigint, limit: bigint, logs: Array<ReturnType<typeof releaseLog>> = []) {
+    const served: Array<{ from: bigint; to: bigint }> = [];
+    let refused = 0;
+    return {
+      served,
+      refusals: () => refused,
+      client: {
+        getBlockNumber: async () => head,
+        getLogs: async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
+          if (toBlock - fromBlock + 1n > limit) {
+            refused++;
+            throw rpcError(`ranges over ${limit} blocks are not supported on free plan`);
+          }
+          served.push({ from: fromBlock, to: toBlock });
+          return logs.filter((l) => l.blockNumber >= fromBlock && l.blockNumber <= toBlock);
+        },
+      } as never,
+    };
+  }
+
+  it("shrinks until the provider accepts, then covers every block exactly once", async () => {
+    const release = releaseLog({ policyId: 9n, recipient: "0x" + "1".repeat(40), amount: 5n, payoutCurrency: 0, destinationDomain: 26, blockNumber: 350n });
+    const { client, served, refusals } = cappedClient(1002n, 25n, [release]);
+    const seen: string[] = [];
+    const watcher = new EventWatcher({
+      client, vaultAddress: VAULT, cursors: new CursorStore(await tmpFile("c.json")),
+      deployBlock: 100n, maxSpan: 1000n, confirmations: 2n,
+    });
+
+    await watcher.scanOnce(async (p) => { seen.push(p.policyId); });
+
+    expect(refusals()).toBeGreaterThan(0);
+    expect(seen).toEqual(["9"]);
+    // Contiguous from the deploy block to the safe head: no gap, no overlap.
+    expect(served[0]?.from).toBe(100n);
+    expect(served.at(-1)?.to).toBe(1000n);
+    for (let i = 1; i < served.length; i++) expect(served[i]!.from).toBe(served[i - 1]!.to + 1n);
+  });
+
+  it("remembers the size that worked instead of relearning it every chunk", async () => {
+    const { client, refusals } = cappedClient(5002n, 30n);
+    const watcher = new EventWatcher({
+      client, vaultAddress: VAULT, cursors: new CursorStore(await tmpFile("c.json")),
+      deployBlock: 1n, maxSpan: 960n, confirmations: 2n,
+    });
+    await watcher.scanOnce(async () => {});
+    // 960 -> 480 -> 240 -> 120 -> 60 -> 30: five refusals to learn it, then none per chunk.
+    expect(refusals()).toBeLessThan(10);
+  });
+
+  it("gives up rather than looping when even the smallest range is refused", async () => {
+    const { client } = cappedClient(500n, 5n);
+    const watcher = new EventWatcher({
+      client, vaultAddress: VAULT, cursors: new CursorStore(await tmpFile("c.json")),
+      deployBlock: 100n, maxSpan: 1000n, confirmations: 2n,
+    });
+    await expect(watcher.scanOnce(async () => {})).rejects.toThrow();
+  });
+
+  it("does not shrink when throttled, it surfaces the error for the poll loop to back off", async () => {
+    const asked: bigint[] = [];
+    const client = {
+      getBlockNumber: async () => 1002n,
+      getLogs: async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
+        asked.push(toBlock - fromBlock + 1n);
+        throw rpcError("rate limit exceeded", "Request exceeds defined limit.");
+      },
+    } as never;
+    const watcher = new EventWatcher({
+      client, vaultAddress: VAULT, cursors: new CursorStore(await tmpFile("c.json")),
+      deployBlock: 1n, maxSpan: 500n, confirmations: 2n,
+    });
+    await expect(watcher.scanOnce(async () => {})).rejects.toThrow();
+    await expect(watcher.scanOnce(async () => {})).rejects.toThrow();
+    expect(asked).toEqual([500n, 500n]);
   });
 });
