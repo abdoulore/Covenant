@@ -68,7 +68,7 @@ All figures below are from the v4 re-proof pass, run on 2026-08-09.
 | PolicyVault v4 deployment cost | 0.0797 USDC (v1 was 0.0294; cost grows with each condition type) |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 383, across contract and executor |
+| Automated tests | 410, across contract and executor |
 
 Deployed PolicyVault: [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) on Arc Testnet (chain id 5042002), carrying all six condition types. Two superseded deployments remain readable for their proofs: v3 at [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) and v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Each is a separate address because the vault is immutable. Full hashes, per-deployment, are in [docs/RESULTS.md](docs/RESULTS.md), which also records the known defects found so far.
 
@@ -114,6 +114,17 @@ npm --prefix app run build  # production bundle, gated on the bundle secret chec
 ```
 
 The keeper records every settlement in Postgres, keyed on the vault, the policy id, and the period, so the database itself refuses to pay the same release twice. Policy ids restart at zero on each vault deployment, so the vault has to be part of that key; without it, a policy on a new vault would look like one already paid. The keeper will not start without `DATABASE_URL`.
+
+Payments that never happened are checked for too. The keeper keeps a ledger of every release the vault has emitted, from its deploy block, and every five minutes compares it with what was settled. A release left unpaid, a settlement stuck or failed, or the keeper falling behind the chain is sent to Telegram once, and again when it clears. The same check and the tools to act on it are commands:
+
+```bash
+npm run reconcile                              # every release that needs attention
+npm run reconcile -- backfill                  # record the vault's release history into the ledger
+npm run reconcile -- resolve <tx> --note "..." # record a release as paid another way
+npm run settle-release -- <tx>                 # what paying a stranded release would do; --send to pay it
+```
+
+`settle-release` refuses a release the ledger has not seen, one recorded as paid another way, and one with any settlement already started, and pays through the same database claim as the keeper, so it cannot pay twice.
 
 The API refuses to start in a deployed environment without an operator secret and a pinned CORS origin. For a local run set `COVENANT_ENV=dev`. The app talks only to the API: it holds no keys and no provider, and `npm --prefix app run build` fails if any secret material reaches the bundle.
 

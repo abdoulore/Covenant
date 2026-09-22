@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AppState, type Policy } from "./api";
 import { agoIso } from "./lib";
-import { Cards, DepegPanel, PoliciesTable, Receipts } from "./components/Read";
+import { Cards, DepegPanel, PoliciesTable, Receipts, UnsettledPanel } from "./components/Read";
 import { Login } from "./components/Login";
 import { CreatePolicy } from "./components/CreatePolicy";
 import { PolicyDetail } from "./components/PolicyDetail";
@@ -136,7 +136,7 @@ export function App() {
         )}
 
         {state && tab === "settlements" && (
-          <section><div className="grid-label"><Icon name="receipt" /> Settlement receipts, custody measured per transaction</div><Receipts settlements={state.settlements} /></section>
+          <section><UnsettledPanel unsettled={state.unsettled} vaults={state.vaults} /><div className="grid-label"><Icon name="receipt" /> Settlement receipts, custody measured per transaction</div><Receipts settlements={state.settlements} /></section>
         )}
 
         {state && tab === "system" && <System state={state} />}

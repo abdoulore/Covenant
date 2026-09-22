@@ -44,6 +44,33 @@ export function pgConnectionString(url: string): string {
   return u.toString();
 }
 
+/** A table name inside a validated schema, quoted. */
+export function qualified(schema: string, table: string): string {
+  if (!SCHEMA_NAME.test(schema)) throw new Error(`Invalid schema name "${schema}"`);
+  return `"${schema}".${table}`;
+}
+
+/**
+ * The settlements table. Exported because the release ledger reconciles against it and must be
+ * able to create it too, whichever of the two a fresh database meets first.
+ */
+export async function migrateSettlements(query: (sql: string) => Promise<unknown>, schema: string): Promise<void> {
+  const table = qualified(schema, "settlements");
+  if (schema !== "public") await query(`create schema if not exists "${schema}"`);
+  await query(`
+    create table if not exists ${table} (
+      vault         text           not null check (vault ~ '^0x[0-9a-f]{40}$'),
+      policy_id     numeric(78, 0) not null check (policy_id >= 0),
+      period_index  integer        not null check (period_index >= 0),
+      status        text           not null check (status in ('in_progress', 'settled', 'failed')),
+      record        jsonb          not null,
+      created_at    timestamptz    not null default now(),
+      updated_at    timestamptz    not null default now(),
+      primary key (vault, policy_id, period_index)
+    )`);
+  await query(`create index if not exists settlements_in_progress on ${table} (created_at) where status = 'in_progress'`);
+}
+
 export interface PostgresSettlementStoreOptions {
   connectionString: string;
   /** Schema holding the table. Defaults to public; tests use a throwaway schema per run. */
@@ -62,8 +89,7 @@ export class PostgresSettlementStore implements SettlementStoreLike {
 
   constructor(opts: PostgresSettlementStoreOptions) {
     this.schema = opts.schema ?? "public";
-    if (!SCHEMA_NAME.test(this.schema)) throw new Error(`Invalid schema name "${this.schema}"`);
-    this.table = `"${this.schema}".settlements`;
+    this.table = qualified(this.schema, "settlements");
     this.pool = new pg.Pool({
       connectionString: pgConnectionString(opts.connectionString),
       max: opts.maxConnections ?? 3,
@@ -85,23 +111,7 @@ export class PostgresSettlementStore implements SettlementStoreLike {
 
   /** Create the table if it does not exist. Idempotent, and run once per store instance. */
   migrate(): Promise<void> {
-    this.ready ??= (async () => {
-      if (this.schema !== "public") await this.pool.query(`create schema if not exists "${this.schema}"`);
-      await this.pool.query(`
-        create table if not exists ${this.table} (
-          vault         text           not null check (vault ~ '^0x[0-9a-f]{40}$'),
-          policy_id     numeric(78, 0) not null check (policy_id >= 0),
-          period_index  integer        not null check (period_index >= 0),
-          status        text           not null check (status in ('in_progress', 'settled', 'failed')),
-          record        jsonb          not null,
-          created_at    timestamptz    not null default now(),
-          updated_at    timestamptz    not null default now(),
-          primary key (vault, policy_id, period_index)
-        )`);
-      await this.pool.query(
-        `create index if not exists settlements_in_progress on ${this.table} (created_at) where status = 'in_progress'`,
-      );
-    })();
+    this.ready ??= migrateSettlements((sql) => this.pool.query(sql), this.schema);
     return this.ready;
   }
 

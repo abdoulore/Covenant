@@ -37,7 +37,9 @@
     "try-leg": "npm exec --workspace executor -- tsx --env-file=../.env scripts/try-leg.ts",
     "v4:preflight": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-preflight.ts",
     "v4:inventory": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-inventory.ts",
-    "v4:cancel": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-cancel.ts"
+    "v4:cancel": "npm exec --workspace executor -- tsx --env-file=../.env scripts/v4-cancel.ts",
+    "reconcile": "npm exec --workspace executor -- tsx --env-file=../.env scripts/reconcile.ts",
+    "settle-release": "npm exec --workspace executor -- tsx --env-file=../.env scripts/settle-release.ts"
   },
   "engines": {
     "node": ">=20.18"

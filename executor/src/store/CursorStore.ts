@@ -51,6 +51,15 @@ export class CursorStore {
     return this.value;
   }
 
+  /**
+   * The position in memory, without reading the file or picking a starting block. For observers
+   * such as the lag check: calling load() from outside would cache the observer's guess as the
+   * cursor before the watcher had chosen its own cold-start block.
+   */
+  peek(): bigint | undefined {
+    return this.value;
+  }
+
   async set(block: bigint): Promise<void> {
     if (this.value !== undefined && block < this.value) {
       throw new Error(

@@ -68,7 +68,13 @@ server.listen(config.port, () => {
  */
 if (/^(1|true|on|yes)$/i.test(process.env.COVENANT_KEEPER ?? "")) {
   const { keeperFromEnv } = await import("../keeper/keeperFromEnv.js");
-  keeperFromEnv({ stateDir, databaseUrl: process.env.DATABASE_URL, rpcUrl: process.env.ARC_TESTNET_RPC_URL ?? "" })
+  keeperFromEnv({
+    stateDir,
+    databaseUrl: process.env.DATABASE_URL,
+    rpcUrl: process.env.ARC_TESTNET_RPC_URL ?? "",
+    logsRpcUrl: process.env.ARC_LOGS_RPC_URL || process.env.ARC_TESTNET_RPC_FALLBACK_URL || undefined,
+    vaultDeployBlock: process.env.POLICY_VAULT_V4_DEPLOY_BLOCK ? BigInt(process.env.POLICY_VAULT_V4_DEPLOY_BLOCK) : undefined,
+  })
     .then(async (keeper) => {
       await keeper.start();
       for (const signal of ["SIGTERM", "SIGINT"] as const) {

@@ -1,5 +1,5 @@
 /** The read views, ported from the monitor to React. Read-only: they render API state only. */
-import type { AppState, Oracle, Policy, Settlement } from "../api";
+import type { AppState, Oracle, Policy, Settlement, Unsettled } from "../api";
 import { agoUnix, ARC_DOMAIN, relUnix, shortAddr, shortHash, usdc } from "../lib";
 import { Icon } from "./Icon";
 
@@ -111,6 +111,46 @@ export function PoliciesTable({ policies, onSelect }: { policies: Policy[]; onSe
 function TxLink({ url, hash }: { url?: string; hash?: string }) {
   if (!hash) return <span className="dim">not settled</span>;
   return url ? <a className="mono" href={url} target="_blank" rel="noopener">{shortHash(hash)}</a> : <span className="mono dim">{shortHash(hash)}</span>;
+}
+
+const UNSETTLED_TEXT: Record<Unsettled["kind"], string> = {
+  unpaid: "released, never paid",
+  stuck: "settlement started, not finished",
+  failed: "settlement failed, waiting on a person",
+};
+
+/**
+ * Releases nobody settled, above the receipts that went well.
+ *
+ * Receipts alone only ever show success, which is how four unpaid releases went unnoticed on v4 for
+ * six weeks. This is the other half of the picture, and it is shown first because it is the half
+ * that needs someone to act. An unreadable ledger says so, rather than showing an empty list that
+ * would read as "nothing owed".
+ */
+export function UnsettledPanel({ unsettled, vaults }: { unsettled: Unsettled[] | null | undefined; vaults: AppState["vaults"] }) {
+  if (unsettled === undefined) return null;
+  if (unsettled === null) {
+    return <div className="notice err">Could not read the release ledger, so unpaid releases cannot be shown right now.</div>;
+  }
+  if (!unsettled.length) return null;
+  const label = (v: string) => vaults.find((x) => x.address.toLowerCase() === v.toLowerCase())?.label ?? shortAddr(v);
+  const owed = unsettled.reduce((n, u) => n + Number(u.amount), 0) / 1e6;
+  return (
+    <div className="notice err" style={{ marginBottom: 18 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>
+        {unsettled.length} release{unsettled.length === 1 ? "" : "s"} need attention, {owed.toFixed(2)} USDC in total
+      </div>
+      {unsettled.map((u) => (
+        <div key={`${u.vault}-${u.policyId}-${u.periodIndex}`} className="mono" style={{ fontSize: 12.5, marginTop: 4 }}>
+          policy {u.policyId}{u.periodIndex ? ` p${u.periodIndex}` : ""} on {label(u.vault)} · {usdc(u.amount)} to {shortAddr(u.recipient)} · {UNSETTLED_TEXT[u.kind]}{" "}
+          · <a href={u.release.url} target="_blank" rel="noopener">release</a>
+        </div>
+      ))}
+      <div style={{ fontSize: 12, marginTop: 10, opacity: 0.85 }}>
+        Pay one with <span className="mono">npm run settle-release -- &lt;release tx&gt;</span>, or record how it was paid with <span className="mono">npm run reconcile -- resolve</span>.
+      </div>
+    </div>
+  );
 }
 
 export function Receipts({ settlements }: { settlements: Settlement[] }) {

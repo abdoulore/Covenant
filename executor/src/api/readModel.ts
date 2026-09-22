@@ -16,6 +16,7 @@ import { chainFor, ARC_DOMAIN } from "../config.js";
 import { labelsFor, VAULTS, type VaultLabel, type VaultSurface } from "./vaults.js";
 import { hermesConfig, hermesAuthMessage } from "../oracle/HermesPythClient.js";
 import { PostgresSettlementStore } from "../store/PostgresSettlementStore.js";
+import { ReleaseLedger } from "../store/ReleaseLedger.js";
 import type { SettlementStoreLike } from "../store/SettlementStore.js";
 
 // Index is the onchain enum value. Append-only, so a v2 or v3 policy decodes the same here.
@@ -67,6 +68,8 @@ export interface ReadModelDeps {
   stateDir: string;
   /** The keeper's settlement store, when a database is configured. Read-only from here. */
   settlements?: Pick<SettlementStoreLike, "all" | "keyFor"> | undefined;
+  /** The release ledger, for releases nobody settled. Read-only from here. */
+  ledger?: Pick<ReleaseLedger, "unsettled"> | undefined;
 }
 
 export interface ReadModelOptions {
@@ -104,8 +107,9 @@ export function readModelFromOptions(opts: ReadModelOptions): ReadModelDeps {
 
   // One store, and so one connection pool, per process. Built here rather than per read.
   const settlements = opts.databaseUrl ? new PostgresSettlementStore({ connectionString: opts.databaseUrl }) : undefined;
+  const ledger = opts.databaseUrl ? new ReleaseLedger({ connectionString: opts.databaseUrl }) : undefined;
 
-  return { client, vaults, feedId: opts.feedId || DEFAULT_FEED, stateDir: opts.stateDir, settlements };
+  return { client, vaults, feedId: opts.feedId || DEFAULT_FEED, stateDir: opts.stateDir, settlements, ledger };
 }
 
 /**
@@ -249,9 +253,31 @@ async function readOracle(deps: ReadModelDeps) {
   return null;
 }
 
-/** The full read-only state: policies, settlements, and the live oracle price. */
+/**
+ * Releases the ledger says nobody settled, for the app to put in front of an operator.
+ *
+ * A database that cannot be reached costs this list, not the page. An empty list and an unknown one
+ * are different things, so an unavailable ledger reports null rather than claiming nothing is owed.
+ */
+async function readUnsettled(deps: ReadModelDeps) {
+  if (!deps.ledger) return null;
+  try {
+    return (await deps.ledger.unsettled()).map((u) => ({
+      kind: u.kind, vault: u.vault, policyId: u.policyId, periodIndex: u.periodIndex, amount: u.amount,
+      recipient: u.recipient, releasedAt: u.releasedAt, ageSeconds: u.ageSeconds,
+      release: { txHash: u.releaseTxHash, url: chainFor(ARC_DOMAIN).explorerTxUrl(u.releaseTxHash) },
+    }));
+  } catch (err) {
+    console.warn(`readUnsettled: ledger unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
+/** The full read-only state: policies, settlements, releases nobody settled, and the live price. */
 export async function buildReadState(deps: ReadModelDeps) {
-  const [policies, settlements, oracle] = await Promise.all([readPolicies(deps), readSettlements(deps), readOracle(deps)]);
+  const [policies, settlements, oracle, unsettled] = await Promise.all([
+    readPolicies(deps), readSettlements(deps), readOracle(deps), readUnsettled(deps),
+  ]);
   return {
     generatedAt: new Date().toISOString(),
     vaults: deps.vaults.map((v) => ({
@@ -260,7 +286,7 @@ export async function buildReadState(deps: ReadModelDeps) {
       writable: VAULTS[v.label].writable,
       note: VAULTS[v.label].note,
     })),
-    policies, settlements, oracle,
+    policies, settlements, oracle, unsettled,
   };
 }
 

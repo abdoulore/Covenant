@@ -133,3 +133,15 @@ export function vaultAddress(
 ): `0x${string}` | undefined {
   return env[VAULT_ENV_VAR[label]] as `0x${string}` | undefined;
 }
+
+/**
+ * The label for a vault address, for people reading alerts and logs. Falls back to a shortened
+ * address for a vault this registry does not know, rather than guessing a label.
+ */
+export function labelForAddress(address: string, env: Record<string, string | undefined> = process.env): string {
+  const target = address.toLowerCase();
+  for (const label of VAULT_LABELS) {
+    if (env[VAULT_ENV_VAR[label]]?.toLowerCase() === target) return label;
+  }
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}

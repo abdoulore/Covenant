@@ -32,12 +32,22 @@ export interface Settlement {
 
 export interface Oracle { pair: string; price: number; conf: number; publishTime: number; decimals: number; }
 
+/** A release the chain made that nobody settled. The funds are waiting on a person. */
+export interface Unsettled {
+  kind: "unpaid" | "stuck" | "failed";
+  vault: string; policyId: string; periodIndex: number; amount: string; recipient: string;
+  releasedAt: string | null; ageSeconds: number;
+  release: { txHash: string; url: string };
+}
+
 export interface AppState {
   generatedAt: string;
   vaults: { label: string; address: string; writable?: boolean; note?: string }[];
   policies: Policy[];
   settlements: Settlement[];
   oracle: Oracle | null;
+  /** Null when the ledger could not be read: unknown, which is not the same as nothing owed. */
+  unsettled?: Unsettled[] | null;
 }
 
 export interface WriteResult { txHash: string; explorerUrl: string; policyId?: string; }

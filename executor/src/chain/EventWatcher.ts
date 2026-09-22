@@ -208,39 +208,50 @@ export class EventWatcher {
   }
 
   private decode(log: Log): ReleasedPolicy {
-    const { args } = decodeEventLog({
-      abi: POLICY_RELEASED_ABI,
-      data: log.data,
-      topics: log.topics,
-    });
-
-    const currency = PAYOUT_CURRENCIES[Number(args.payoutCurrency)];
-    if (!currency) {
-      throw new Error(
-        `Unknown payoutCurrency ${args.payoutCurrency} in policy ${args.policyId}. ` +
-          `The contract enum has gained a value the executor does not know how to route.`,
-      );
-    }
-
-    const destinationDomain = Number(args.destinationDomain);
-    // Fail here rather than deep inside an SDK call, so an unroutable release is legible.
-    chainFor(destinationDomain);
-
-    return {
-      // From the log itself, not from configuration: the vault that emitted the event is the one
-      // whose numbering this policy id belongs to.
-      vault: (log.address ?? this.vaultAddress).toLowerCase(),
-      policyId: args.policyId.toString(),
-      periodIndex: Number(args.periodIndex),
-      recipient: args.recipient,
-      amount: args.amount.toString(),
-      payoutCurrency: currency,
-      destinationDomain,
-      executor: args.executor,
-      releaseTxHash: log.transactionHash ?? "",
-      releaseBlockNumber: log.blockNumber ?? 0n,
-    };
+    return decodeReleaseLog(log, this.vaultAddress);
   }
+}
+
+/**
+ * A PolicyReleased log as the engine's input. Shared by the watcher and by manual recovery, so a
+ * release paid by hand is read exactly the way the keeper would have read it.
+ */
+export function decodeReleaseLog(log: Log, fallbackVault?: string): ReleasedPolicy {
+  const { args } = decodeEventLog({
+    abi: POLICY_RELEASED_ABI,
+    data: log.data,
+    topics: log.topics,
+  });
+
+  const currency = PAYOUT_CURRENCIES[Number(args.payoutCurrency)];
+  if (!currency) {
+    throw new Error(
+      `Unknown payoutCurrency ${args.payoutCurrency} in policy ${args.policyId}. ` +
+        `The contract enum has gained a value the executor does not know how to route.`,
+    );
+  }
+
+  const destinationDomain = Number(args.destinationDomain);
+  // Fail here rather than deep inside an SDK call, so an unroutable release is legible.
+  chainFor(destinationDomain);
+
+  const vault = log.address ?? fallbackVault;
+  if (!vault) throw new Error("A release log without an address cannot say which vault emitted it.");
+
+  return {
+    // From the log itself, not from configuration: the vault that emitted the event is the one
+    // whose numbering this policy id belongs to.
+    vault: vault.toLowerCase(),
+    policyId: args.policyId.toString(),
+    periodIndex: Number(args.periodIndex),
+    recipient: args.recipient,
+    amount: args.amount.toString(),
+    payoutCurrency: currency,
+    destinationDomain,
+    executor: args.executor,
+    releaseTxHash: log.transactionHash ?? "",
+    releaseBlockNumber: log.blockNumber ?? 0n,
+  };
 }
 
 /** Chain order within a scan: block, then position in block. */
