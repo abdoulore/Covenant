@@ -60,23 +60,37 @@ function loadEnv() {
   }
 }
 
-function rpcFor(chain) {
-  for (const key of chain.rpcEnv) {
-    if (process.env[key]) return process.env[key];
-  }
-  return undefined;
+/**
+ * Every configured RPC for a chain, not just the first.
+ *
+ * One RPC answering "no such transaction" is not proof that it does not exist. Public RPCs prune
+ * old history on free plans, and do it silently: base-sepolia.drpc.org began returning null for
+ * transactions from August while sepolia.base.org still served them, which failed this check in CI
+ * for three hashes that are real. A hash is reported fake only when every RPC agrees.
+ */
+function rpcsFor(chain) {
+  return chain.rpcEnv.map((key) => process.env[key]).filter(Boolean);
 }
 
-async function txExists(rpc, hash) {
+async function rpcCall(rpc, method, hash) {
   const res = await fetch(rpc, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionByHash", params: [hash] }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [hash] }),
   });
   if (!res.ok) throw new Error(`RPC returned ${res.status}`);
   const body = await res.json();
   if (body.error) throw new Error(body.error.message ?? "RPC error");
-  return body.result != null;
+  return body.result;
+}
+
+/**
+ * Receipt first: it proves the transaction was mined, which is the claim. The transaction lookup is
+ * a second chance, because providers index the two separately and prune them differently.
+ */
+async function txExists(rpc, hash) {
+  if ((await rpcCall(rpc, "eth_getTransactionReceipt", hash)) != null) return true;
+  return (await rpcCall(rpc, "eth_getTransactionByHash", hash)) != null;
 }
 
 loadEnv();
@@ -139,17 +153,17 @@ for (const entry of asserted.values()) {
   let lastError;
   let anyRpc = false;
 
-  for (const chain of candidates) {
-    const rpc = rpcFor(chain);
-    if (!rpc) continue;
-    anyRpc = true;
-    try {
-      if (await txExists(rpc, entry.hash)) {
-        found = true;
-        break;
+  search: for (const chain of candidates) {
+    for (const rpc of rpcsFor(chain)) {
+      anyRpc = true;
+      try {
+        if (await txExists(rpc, entry.hash)) {
+          found = true;
+          break search;
+        }
+      } catch (err) {
+        lastError = err.message;
       }
-    } catch (err) {
-      lastError = err.message;
     }
   }
 
