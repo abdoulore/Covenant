@@ -116,7 +116,7 @@ async function releasePeriodExpectingRevert(policyId: bigint) {
 }
 
 async function funded(policyId: bigint): Promise<bigint> {
-  const p = (await publicClient.readContract({ address: VAULT, abi: vaultAbi, functionName: "getPolicy", args: [policyId] })) as any[];
+  const p = (await publicClient.readContract({ address: VAULT, abi: vaultAbi, functionName: "getPolicy", args: [policyId] })) as readonly unknown[];
   return p[2] as bigint; // funded is the third field of the Policy tuple
 }
 

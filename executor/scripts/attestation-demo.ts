@@ -26,6 +26,7 @@ import { toDecimalString } from "../src/legs/legs.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { ARC_DOMAIN, chainFor } from "../src/config.js";
 import { currentVaultAddress } from "../src/api/vaults.js";
+import type { SettlementRecord } from "../src/types.js";
 
 const require = createRequire(import.meta.url);
 const { initiateDeveloperControlledWalletsClient } = require("@circle-fin/developer-controlled-wallets");
@@ -149,7 +150,8 @@ async function main() {
   const watcher = new EventWatcher({ client: publicClient, vaultAddress: VAULT, cursors, deployBlock: head, confirmations: 1n });
 
   log(`settling by watching the chain`);
-  let record;
+  // Typed explicitly: it is assigned inside a callback, which TypeScript's narrowing cannot see.
+  let record: SettlementRecord | undefined;
   const deadline = Date.now() + 10 * 60_000;
   while (!record && Date.now() < deadline) {
     await watcher.scanOnce(async (policy) => {

@@ -14,7 +14,8 @@
 
 import { AppKit } from "@circle-fin/app-kit";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
-import { runBridgeLeg, runFxLeg, runPayoutLeg, toDecimalString } from "../src/legs/legs.js";
+import { runBridgeLeg, runFxLeg, runPayoutLeg, toDecimalString, type LegContext } from "../src/legs/legs.js";
+import { createChainResolver, rpcUrlsFromEnv } from "../src/legs/appKitChains.js";
 import { ARC_DOMAIN, BASE_SEPOLIA_DOMAIN, chainFor } from "../src/config.js";
 import type { LegKind } from "../src/types.js";
 
@@ -34,10 +35,14 @@ const baseUnits = (decimal: string): string => {
 
 const amount = baseUnits(amountArg);
 const wallets = CircleWalletProvider.fromEnv();
-const ctx = {
+// Built the way createLegRunner builds it, so a smoke test exercises the same chain resolution as
+// the keeper. The resolver became required when legs started pinning their own RPC endpoints, and
+// this script, untypechecked, went on building a context without one.
+const ctx: LegContext = {
   kit: new AppKit(),
   adapter: wallets.getAdapter(),
-  kitKey: process.env.CIRCLE_KIT_KEY,
+  resolveChain: createChainResolver(rpcUrlsFromEnv()),
+  ...(process.env.CIRCLE_KIT_KEY ? { kitKey: process.env.CIRCLE_KIT_KEY } : {}),
 };
 
 const executorArc = await wallets.getWallet("executor", ARC_DOMAIN);
@@ -58,7 +63,9 @@ if (kind === "fx") {
 } else if (kind === "bridge") {
   const executorDest = await wallets.getWallet("executor", BASE_SEPOLIA_DOMAIN);
   console.log(`to      ${executorDest.address} on ${chainFor(BASE_SEPOLIA_DOMAIN).name}\n`);
-  result = await runBridgeLeg(ctx, executorArc, executorDest, amount);
+  // Destination is a domain number and a recipient address. This used to pass a wallet object in
+  // the domain's place, which only a typecheck could have caught.
+  result = await runBridgeLeg(ctx, executorArc, BASE_SEPOLIA_DOMAIN, executorDest.address, amount);
 } else {
   const recipient = await wallets.getWallet("recipient", ARC_DOMAIN);
   console.log(`to      ${recipient.address}\n`);
