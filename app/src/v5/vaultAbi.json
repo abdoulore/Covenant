@@ -1,0 +1,2416 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [
+   {
+    "name": "usdc_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "tokenMessenger_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "destinations",
+    "type": "uint32[]",
+    "internalType": "uint32[]"
+   },
+   {
+    "name": "guardian_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "fundsCap_",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "ARC_DOMAIN",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "FORWARD_HOOK",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_APPROVERS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_PAUSE",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MIN_WINDOW",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "PAUSE_COOLDOWN",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "STANDARD_FINALITY",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "acceptGuardian",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "addFeeAllowance",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "approve",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "attest",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "signature",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "attestationDigest",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "cancel",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "cancelWithProof",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "proof",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "checkCondition",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "createApprovalPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "approvers",
+    "type": "address[]",
+    "internalType": "address[]"
+   },
+   {
+    "name": "threshold",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createAttestationPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "attester",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createOraclePolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "feed",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "comparator",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.Comparator"
+   },
+   {
+    "name": "threshold",
+    "type": "int256",
+    "internalType": "int256"
+   },
+   {
+    "name": "maxStaleSeconds",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createOraclePullPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "adapter",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "feedId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "comparator",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.Comparator"
+   },
+   {
+    "name": "threshold1e18",
+    "type": "int256",
+    "internalType": "int256"
+   },
+   {
+    "name": "maxStaleSeconds",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "maxConfBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createRecurringPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "amountPerPeriod",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "interval",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "startTime",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "periods",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "initialFunding",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "initialFees",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createSweepPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "buffer",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minSweep",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "interval",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "startTime",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "initialFunding",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "initialFees",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "createTimelockPolicy",
+  "inputs": [
+   {
+    "name": "t",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Terms",
+    "components": [
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   },
+   {
+    "name": "releaseTime",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "effectiveDeadline",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "eip712Domain",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "fields",
+    "type": "bytes1",
+    "internalType": "bytes1"
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "version",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "chainId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "verifyingContract",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "salt",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "extensions",
+    "type": "uint256[]",
+    "internalType": "uint256[]"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "extendDeadline",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "newDeadline",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "fundsCap",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "getPolicy",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "tuple",
+    "internalType": "struct PolicyVaultV5.Policy",
+    "components": [
+     {
+      "name": "owner",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "recipient",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "amount",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "funded",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "feeAllowance",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "maxFeePerTransfer",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "destinationDomain",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "conditionType",
+      "type": "uint8",
+      "internalType": "enum PolicyVaultV5.ConditionType"
+     },
+     {
+      "name": "status",
+      "type": "uint8",
+      "internalType": "enum PolicyVaultV5.Status"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "pausedAtCreation",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "releaseTime",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "threshold",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "approvalCount",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "attester",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "attested",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "feed",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "comparator",
+      "type": "uint8",
+      "internalType": "enum PolicyVaultV5.Comparator"
+     },
+     {
+      "name": "maxStaleSeconds",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "oracleThreshold",
+      "type": "int256",
+      "internalType": "int256"
+     },
+     {
+      "name": "adapter",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "feedId",
+      "type": "bytes32",
+      "internalType": "bytes32"
+     },
+     {
+      "name": "maxConfBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "recurring",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "isSweep",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "amountPerPeriod",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "buffer",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "minSweep",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "interval",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "nextDue",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "stoppedAt",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "periods",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "periodsReleased",
+      "type": "uint32",
+      "internalType": "uint32"
+     }
+    ]
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "guardian",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "hasApproved",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isApprover",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isDestination",
+  "inputs": [
+   {
+    "name": "domain",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isPeriodDue",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "multicall",
+  "inputs": [
+   {
+    "name": "data",
+    "type": "bytes[]",
+    "internalType": "bytes[]"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "results",
+    "type": "bytes[]",
+    "internalType": "bytes[]"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "nextPolicyId",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "pause",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "paused",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "pausedSeconds",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "total",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "pendingGuardian",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "permitUsdc",
+  "inputs": [
+   {
+    "name": "value",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "permitDeadline",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "v",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "r",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "s",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "proposeGuardian",
+  "inputs": [
+   {
+    "name": "next",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "raiseCap",
+  "inputs": [
+   {
+    "name": "newCap",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "raiseMaxFee",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "newMaxFee",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "reclaim",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "release",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "releasePeriod",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "releaseWithProof",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "proof",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "renounceGuardian",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "statusOf",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.Status"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "stop",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "tokenMessenger",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ITokenMessengerV2"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "topUp",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "totalHeld",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "unpause",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "usdc",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IERC20"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "event",
+  "name": "Approved",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "approver",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "approvalCount",
+    "type": "uint8",
+    "indexed": false,
+    "internalType": "uint8"
+   },
+   {
+    "name": "threshold",
+    "type": "uint8",
+    "indexed": false,
+    "internalType": "uint8"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Attested",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "attester",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CapRaised",
+  "inputs": [
+   {
+    "name": "fundsCap",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "DeadlineExtended",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "deadline",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "EIP712DomainChanged",
+  "inputs": [],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Funded",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "toPayouts",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "toFees",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "GuardianChanged",
+  "inputs": [
+   {
+    "name": "previous",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "current",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "GuardianProposed",
+  "inputs": [
+   {
+    "name": "guardian",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "MaxFeeRaised",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "maxFeePerTransfer",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Paused",
+  "inputs": [
+   {
+    "name": "until",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PolicyCancelled",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "refundTo",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "refunded",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PolicyCreated",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "owner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "conditionType",
+    "type": "uint8",
+    "indexed": false,
+    "internalType": "enum PolicyVaultV5.ConditionType"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "destinationDomain",
+    "type": "uint32",
+    "indexed": false,
+    "internalType": "uint32"
+   },
+   {
+    "name": "deadline",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PolicyFinished",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "refunded",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PolicyReleased",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "destinationDomain",
+    "type": "uint32",
+    "indexed": false,
+    "internalType": "uint32"
+   },
+   {
+    "name": "periodIndex",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "fee",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PolicyStopped",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "keptForRecipient",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "refunded",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "Unpaused",
+  "inputs": [],
+  "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "AddressEmptyCode",
+  "inputs": [
+   {
+    "name": "target",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "AlreadyApproved",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "approver",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "AlreadyAttested",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "AlreadyPaused",
+  "inputs": [
+   {
+    "name": "until",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "BeforeDeadline",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "effectiveDeadline",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "CapNotHigher",
+  "inputs": [
+   {
+    "name": "current",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "proposed",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ConditionMet",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ConditionNotMet",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ConfidenceTooWide",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "conf",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "value",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "maxConfBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "DeadlineNotLater",
+  "inputs": [
+   {
+    "name": "current",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "proposed",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "DeadlineTooSoon",
+  "inputs": [
+   {
+    "name": "deadline",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "earliest",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "DuplicateApprover",
+  "inputs": [
+   {
+    "name": "approver",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ECDSAInvalidSignature",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ECDSAInvalidSignatureLength",
+  "inputs": [
+   {
+    "name": "length",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ECDSAInvalidSignatureS",
+  "inputs": [
+   {
+    "name": "s",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "FailedCall",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "FeeAllowanceShort",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "allowance",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "required",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "FeeNotHigher",
+  "inputs": [
+   {
+    "name": "current",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "proposed",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InsufficientFee",
+  "inputs": [
+   {
+    "name": "required",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "sent",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InvalidApprovalConfig",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidAttestationSignature",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InvalidFee",
+  "inputs": [
+   {
+    "name": "destinationDomain",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "maxFeePerTransfer",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InvalidOracleConfig",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidOraclePullConfig",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidRecurringConfig",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidShortString",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidSweepConfig",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotAnApprover",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "caller",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotGuardian",
+  "inputs": [
+   {
+    "name": "caller",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotPaused",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotPolicyOwner",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "caller",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotRecurring",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "OverCap",
+  "inputs": [
+   {
+    "name": "wouldHold",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "fundsCap",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PastDeadline",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "effectiveDeadline",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PauseCoolingDown",
+  "inputs": [
+   {
+    "name": "availableAt",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PeriodNotDue",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "nextDue",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "nowTs",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PermitFailed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "PolicyIsStopped",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PolicyNotPending",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "status",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.Status"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ReentrancyGuardReentrantCall",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "RefundFailed",
+  "inputs": [
+   {
+    "name": "to",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ReleaseTimeInPast",
+  "inputs": [
+   {
+    "name": "releaseTime",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "nowTs",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ReleasesPaused",
+  "inputs": [
+   {
+    "name": "until",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "SafeERC20FailedOperation",
+  "inputs": [
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "StringTooLong",
+  "inputs": [
+   {
+    "name": "str",
+    "type": "string",
+    "internalType": "string"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "SweepBelowMin",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "slice",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minSweep",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "Underfunded",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "funded",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "required",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UnknownPolicy",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UnsupportedDestination",
+  "inputs": [
+   {
+    "name": "destinationDomain",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UseCancelWithProof",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UseReleasePeriod",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UseReleaseWithProof",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "UseStop",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "WrongConditionType",
+  "inputs": [
+   {
+    "name": "policyId",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "expected",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.ConditionType"
+   },
+   {
+    "name": "actual",
+    "type": "uint8",
+    "internalType": "enum PolicyVaultV5.ConditionType"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ZeroAddress",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ZeroAmount",
+  "inputs": []
+ }
+]

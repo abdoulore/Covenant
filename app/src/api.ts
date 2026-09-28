@@ -1,6 +1,7 @@
 /**
- * The API client. The app talks ONLY to the Covenant API, never to the chain or Circle directly, so
- * the client holds no keys and no provider. Writes carry the session cookie (credentials: include)
+ * The API client. For the operator's vaults the app talks ONLY to the Covenant API, never to the
+ * chain directly, so it holds no keys and no provider. v5 is the exception by design: there the
+ * user's own wallet signs and sends, and the app reaches the chain only through that wallet (src/v5). Writes carry the session cookie (credentials: include)
  * and an Idempotency-Key so a double submit cannot double-execute.
  */
 
@@ -19,6 +20,13 @@ export interface Policy {
   recurring?: boolean; isSweep?: boolean;
   amountPerPeriod?: string; buffer?: string; minSweep?: string;
   interval?: string; nextDue?: string; maxCatchUp?: string; periods?: number; periodsReleased?: number;
+  /**
+   * v5 only. The policy belongs to `owner`, who funded it from their own wallet and signs every owner
+   * action there; nothing on the server can act on it. After `effectiveDeadline` (the deadline moved
+   * out by any guardian pause) the owner may reclaim what is left.
+   */
+  selfCustody?: boolean; owner?: string; deadline?: string; effectiveDeadline?: string;
+  feeAllowance?: string; maxFeePerTransfer?: string; stoppedAt?: string;
 }
 
 export interface Settlement {

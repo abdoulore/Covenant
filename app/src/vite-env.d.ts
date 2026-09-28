@@ -12,6 +12,11 @@ interface ImportMetaEnv {
    * hosts. Unset means same-origin (`/api/...`), which is what the dev proxy serves.
    */
   readonly VITE_API_BASE?: string;
+  /**
+   * The v5 vault users sign against from their own wallets. Built in, never taken from the API, so a
+   * server cannot redirect a user's money. Unset uses the deployment pinned in src/v5/chain.ts.
+   */
+  readonly VITE_POLICY_VAULT_V5_ADDRESS?: string;
 }
 
 interface ImportMeta {

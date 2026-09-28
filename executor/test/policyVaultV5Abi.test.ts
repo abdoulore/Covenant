@@ -49,4 +49,21 @@ describe.skipIf(!present)("v5 interface matches the compiled contract", () => {
     const theirs = compiled.find((e) => e.type === "event" && e.name === "PolicyReleased");
     expect(toEventSelector(ours as any)).toBe(toEventSelector(theirs));
   });
+
+  // The app signs v5 transactions from the user's wallet with its own copy of the ABI.
+  it("matches the app's copy of the ABI (resync: node app/scripts/sync-v5-abi.mjs)", () => {
+    const appCopy = join(dirname(fileURLToPath(import.meta.url)), "../../app/src/v5/vaultAbi.json");
+    expect(JSON.parse(readFileSync(appCopy, "utf8"))).toEqual(compiled);
+  });
+});
+
+/** The app pins the vault its users sign against; it must be the one the deploy actually created. */
+describe("the app's pinned v5 vault", () => {
+  it("is the address in the testnet broadcast record", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const run = JSON.parse(readFileSync(join(root, "contracts/broadcast/DeployPolicyVaultV5.s.sol/5042002/run-latest.json"), "utf8"));
+    const deployed = run.transactions.find((t: any) => t.contractName === "PolicyVaultV5").contractAddress;
+    const pinned = readFileSync(join(root, "app/src/v5/chain.ts"), "utf8").match(/V5_TESTNET_VAULT = "(0x[0-9a-fA-F]{40})"/)?.[1];
+    expect(pinned?.toLowerCase()).toBe(deployed.toLowerCase());
+  });
 });

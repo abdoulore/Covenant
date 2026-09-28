@@ -68,7 +68,7 @@ All figures below are from the v4 re-proof pass, run on 2026-08-09.
 | PolicyVault v4 deployment cost | 0.0797 USDC (v1 was 0.0294; cost grows with each condition type) |
 | Recipient paid on Base Sepolia | while holding zero ETH |
 | Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 491, across contract and executor |
+| Automated tests | 493, across contract and executor |
 
 Deployed PolicyVault: [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) on Arc Testnet (chain id 5042002), carrying all six condition types. Two superseded deployments remain readable for their proofs: v3 at [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) and v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Each is a separate address because the vault is immutable. The next vault, v5 (`contracts/src/PolicyVaultV5.sol`), is non-custodial: each user funds their own policies from their own wallet and the vault pays recipients itself. It is deployed to Arc testnet at [`0x87A204d4eDbE715b00eA05a2Ad860f40b710c890`](https://testnet.arcscan.app/address/0x87A204d4eDbE715b00eA05a2Ad860f40b710c890) for its re-proof, but it is not audited and not on mainnet, and nothing else on this page describes it. Full hashes, per-deployment, are in [docs/RESULTS.md](docs/RESULTS.md), which also records the known defects found so far.
 
@@ -130,6 +130,8 @@ For v5, the keeper no longer pays anyone: the vault pays at release. It calls re
 npm run v5:release             # release every v5 policy that can be; --watch to keep going
 npm run v5:monitor             # one monitoring pass
 ```
+
+In the app, v5 is used from the user's own browser wallet, separate from operator sign-in. A user creates a policy with one USDC permit signature and one transaction, and signs every action as the role they hold: anyone can release a policy that is due; its approvers approve; its attester signs; only its owner can cancel, stop, reclaim, extend or add funds. The vault address is built into the app (`app/src/v5/chain.ts`), not taken from the API, so a server cannot redirect a user's money. After a contract change, run `node app/scripts/sync-v5-abi.mjs` to refresh the app's copy of the ABI; the executor suite fails until you do.
 
 `settle-release` refuses a release the ledger has not seen, one recorded as paid another way, and one with any settlement already started, and pays through the same database claim as the keeper, so it cannot pay twice.
 

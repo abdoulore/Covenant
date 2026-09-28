@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type AppState, type Policy } from "./api";
 import { agoIso } from "./lib";
 import { Cards, DepegPanel, PoliciesTable, Receipts, UnsettledPanel } from "./components/Read";
@@ -8,9 +8,11 @@ import { PolicyDetail } from "./components/PolicyDetail";
 import { Approvals } from "./components/Approvals";
 import { System } from "./components/System";
 import { Icon } from "./components/Icon";
+import { WalletButton } from "./components/WalletButton";
+import { resolveV5Vault, V5_VAULT } from "./v5/chain";
 
 type Tab = "overview" | "policies" | "approvals" | "settlements" | "system";
-type Modal = null | "login" | "create";
+type Modal = null | "login" | "create" | "v5create";
 
 /**
  * Where the landing page lives, and the mirror of the landing page's own APP_URL.
@@ -20,6 +22,11 @@ type Modal = null | "login" | "create";
  * the honest path in production beats a guess that is right in neither place.
  */
 const LANDING_URL = "/";
+
+// The v5 screens carry the vault's ABI and viem's contract machinery, which the read-only views never
+// need, so they load when first opened.
+const V5CreatePolicy = lazy(() => import("./components/V5CreatePolicy").then((m) => ({ default: m.V5CreatePolicy })));
+const V5PolicyDetail = lazy(() => import("./components/V5PolicyDetail").then((m) => ({ default: m.V5PolicyDetail })));
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "overview", icon: "grid", label: "Overview" },
@@ -71,6 +78,7 @@ export function App() {
     return () => { live = false; };
   }, []);
 
+  const v5 = resolveV5Vault(state?.vaults);
   const requireOperator = () => (signedIn ? setModal("create") : setModal("login"));
 
   async function signOut() {
@@ -92,6 +100,7 @@ export function App() {
           ))}
         </nav>
         <div className="opstatus">
+          {V5_VAULT && <WalletButton />}
           <span><span className={`dot ${signedIn ? "on" : "off"}`} /> {signedIn ? "operator" : "read only"}</span>
           {signedIn
             ? <button className="btn ghost small" onClick={signOut}>Sign out</button>
@@ -122,7 +131,10 @@ export function App() {
           <section>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
               <div className="grid-label" style={{ margin: 0 }}><Icon name="lock" /> All policies</div>
-              <button className="btn small" onClick={requireOperator}><Icon name="plus" /> Create policy</button>
+              <div className="row" style={{ gap: 8 }}>
+                {v5.vault && <button className="btn small" onClick={() => setModal("v5create")}><Icon name="wallet" /> New policy from your wallet</button>}
+                <button className={`btn small${v5.vault ? " ghost" : ""}`} onClick={requireOperator}><Icon name="plus" /> Create policy (operator)</button>
+              </div>
             </div>
             <div style={{ marginTop: 14 }}><PoliciesTable policies={state.policies} onSelect={setSelected} /></div>
           </section>
@@ -147,7 +159,19 @@ export function App() {
       </footer>
 
       {modal === "create" && <CreatePolicy onClose={() => setModal(null)} onCreated={load} oraclePrice={state?.oracle?.price ?? null} />}
-      {selected && (
+      <Suspense fallback={null}>
+        {modal === "v5create" && v5.vault && <V5CreatePolicy vault={v5.vault} onClose={() => setModal(null)} onCreated={load} />}
+        {selected?.selfCustody && (
+          <V5PolicyDetail
+            policy={state?.policies.find((p) => p.vault === selected.vault && p.id === selected.id) ?? selected}
+            vault={v5.vault}
+            problem={v5.problem}
+            onClose={() => setSelected(null)}
+            onChanged={load}
+          />
+        )}
+      </Suspense>
+      {selected && !selected.selfCustody && (
         <PolicyDetail
           policy={state?.policies.find((p) => p.vault === selected.vault && p.id === selected.id) ?? selected}
           signedIn={signedIn}
