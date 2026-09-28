@@ -102,6 +102,23 @@ describe("V5Monitor", () => {
     expect(store.cross[0]!.mintTx).toBe("0xmint");
   });
 
+  it("counts a mint Circle has confirmed but not yet finalized as paid, and keeps asking until final", async () => {
+    const store = new MemoryStore();
+    store.cross.push({ releaseTx: "0xburn", policyId: "10", periodIndex: 0, amount: "100000", destinationDomain: 6, seenAt: NOW, forwardState: null, mintTx: null });
+    let asked = 0;
+    const m = monitor(store, new Sent(), async () => { asked++; return { forwardState: "CONFIRMED", mintTx: "0xmint" }; });
+    expect(await m.problems([], NOW + 1_500)).toEqual([]);
+    await m.problems([], NOW + 1_600);
+    expect(asked).toBe(2);
+  });
+
+  it("still flags CONFIRMED with no mint transaction", async () => {
+    const store = new MemoryStore();
+    store.cross.push({ releaseTx: "0xburn", policyId: "10", periodIndex: 0, amount: "100000", destinationDomain: 6, seenAt: NOW, forwardState: null, mintTx: null });
+    const m = monitor(store, new Sent(), async () => ({ forwardState: "CONFIRMED", mintTx: null }));
+    expect((await m.problems([], NOW + 1_500)).map((p) => p.kind)).toEqual(["unminted"]);
+  });
+
   it("announces a problem once and clears it once", async () => {
     const store = new MemoryStore();
     const sent = new Sent();

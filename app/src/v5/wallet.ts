@@ -82,7 +82,8 @@ function watch(w: WalletInfo) {
 export async function connect(w: WalletInfo, { silent = false } = {}): Promise<void> {
   set({ connecting: !silent, error: null });
   try {
-    const accounts = (await w.provider.request({ method: silent ? "eth_accounts" : "eth_requestAccounts" })) as string[];
+    if (!silent) await chooseAccounts(w);
+    const accounts = (await w.provider.request({ method: "eth_accounts" })) as string[];
     if (!accounts.length) { set({ connecting: false }); return; }
     const chainId = Number(await w.provider.request({ method: "eth_chainId" }));
     watch(w);
@@ -93,8 +94,38 @@ export async function connect(w: WalletInfo, { silent = false } = {}): Promise<v
   }
 }
 
-/** Stop using the wallet in this app. The wallet's own permission is the user's to revoke there. */
+/**
+ * Open the wallet's own account picker.
+ *
+ * A plain eth_requestAccounts is answered silently with whichever account already has access, so
+ * a user could never bring in a different one: disconnecting and connecting again returned the same
+ * account, and switching in the wallet to an account without access told the app nothing. Asking
+ * for the permission again shows the picker, where any number of accounts can be granted; switching
+ * between granted accounts in the wallet then reaches the app through accountsChanged.
+ */
+async function chooseAccounts(w: WalletInfo): Promise<void> {
+  try {
+    await w.provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] } as never);
+  } catch (e) {
+    const code = (e as { code?: number }).code;
+    // A wallet without the permissions API: fall back to the plain request.
+    if (code === 4200 || code === -32601) await w.provider.request({ method: "eth_requestAccounts" });
+    else throw e;
+  }
+}
+
+/** Bring in another account, or change which accounts the app may see. */
+export async function switchAccount(): Promise<void> {
+  if (state.wallet) await connect(state.wallet);
+}
+
+/**
+ * Stop using the wallet in this app, and ask the wallet to withdraw the site's access too, so the
+ * next connect starts from the picker. A wallet that cannot revoke keeps it; the user can do so there.
+ */
 export function forget() {
+  const w = state.wallet;
+  if (w) void w.provider.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] } as never).catch(() => {});
   detach?.();
   detach = null;
   remember(null);

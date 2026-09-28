@@ -79,6 +79,18 @@ export function App() {
   }, []);
 
   const v5 = resolveV5Vault(state?.vaults);
+  /**
+   * Newest first: the current vault before older ones (the API lists vaults in that order), and within
+   * a vault the highest id first. The API returns each vault oldest first, so taking the tail as
+   * "recent" showed only the last vault's policies and buried a policy just created on the newest.
+   */
+  const policies = state
+    ? [...state.policies].sort((a, b) => {
+        const va = state.vaults.findIndex((v) => v.label === a.vault);
+        const vb = state.vaults.findIndex((v) => v.label === b.vault);
+        return va !== vb ? va - vb : Number(b.id) - Number(a.id);
+      })
+    : [];
   const requireOperator = () => (signedIn ? setModal("create") : setModal("login"));
 
   async function signOut() {
@@ -118,7 +130,7 @@ export function App() {
             <section><div className="grid-label"><Icon name="activity" /> Depeg protection, live</div><DepegPanel o={state.oracle} /></section>
             <section>
               <div className="grid-label"><Icon name="lock" /> Recent policies</div>
-              <PoliciesTable policies={state.policies.slice(-6)} onSelect={setSelected} />
+              <PoliciesTable policies={policies.slice(0, 6)} onSelect={setSelected} />
             </section>
             <section>
               <div className="grid-label"><Icon name="receipt" /> Recent settlements</div>
@@ -136,7 +148,7 @@ export function App() {
                 <button className={`btn small${v5.vault ? " ghost" : ""}`} onClick={requireOperator}><Icon name="plus" /> Create policy (operator)</button>
               </div>
             </div>
-            <div style={{ marginTop: 14 }}><PoliciesTable policies={state.policies} onSelect={setSelected} /></div>
+            <div style={{ marginTop: 14 }}><PoliciesTable policies={policies} onSelect={setSelected} /></div>
           </section>
         )}
 

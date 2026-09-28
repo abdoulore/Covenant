@@ -129,7 +129,11 @@ export class V5Monitor {
       } catch (err) {
         this.log(`v5 monitor: could not ask Circle about ${c.releaseTx}: ${err instanceof Error ? err.message : String(err)}`);
       }
-      if (state !== "COMPLETE" && now - c.seenAt >= this.unmintedAfter) {
+      // CONFIRMED with a mint transaction means the recipient has been paid and Circle is waiting on
+      // the destination's finality, which took ~23 minutes on Base Sepolia (re-proof, policy 10).
+      // Treating only COMPLETE as minted raised a false alarm on a mint that landed in 7 seconds.
+      const minted = state === "COMPLETE" || (state === "CONFIRMED" && !!mint);
+      if (!minted && now - c.seenAt >= this.unmintedAfter) {
         out.push({
           key: `unminted:${c.releaseTx}`, kind: "unminted",
           message: `Covenant ${this.o.vaultLabel}: policy ${c.policyId} paid ${usdc(c.amount)} USDC cross-chain ${h(now - c.seenAt)} ago and Circle ` +

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { connect, forget, switchToArc, useWallet } from "../v5/wallet";
+import { connect, forget, switchAccount, switchToArc, useWallet } from "../v5/wallet";
 import { ARC } from "../v5/chain";
 import { shortAddr } from "../lib";
 import { Icon } from "./Icon";
@@ -19,6 +19,7 @@ export function WalletButton() {
         {w.chainId === ARC.id
           ? <span title={w.account}><span className="dot on" /> <span className="mono">{shortAddr(w.account)}</span></span>
           : <button className="btn small" onClick={switchToArc}>Switch to {ARC.name}</button>}
+        <button className="btn ghost small" disabled={w.connecting} onClick={() => void switchAccount()}>Switch account</button>
         <button className="btn ghost small" onClick={forget}>Disconnect</button>
         {w.error && <span className="wallet-err">{w.error}</span>}
       </span>
