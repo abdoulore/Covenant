@@ -25,6 +25,7 @@ const env = (n: string, fallback?: string): string => {
 
 const deps = readModelFromOptions({
   rpcUrl: env("ARC_TESTNET_RPC_URL"),
+  v5Address: process.env.POLICY_VAULT_V5_ADDRESS,
   v4Address: process.env.POLICY_VAULT_V4_ADDRESS,
   v3Address: process.env.POLICY_VAULT_V3_ADDRESS,
   v2Address: process.env.POLICY_VAULT_ADDRESS,

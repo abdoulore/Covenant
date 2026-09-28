@@ -36,12 +36,18 @@ export interface VaultDeployment {
   surfaces: readonly VaultSurface[];
   /** One line on what this deployment is, shown in the UI when actions are unavailable. */
   note: string;
+  /**
+   * True for v5 onward: owners fund policies from their own wallets and the vault pays recipients
+   * itself. The server never writes to such a vault and the settlement engine never pays for it:
+   * a release there has already paid the recipient, so paying from the executor would pay twice.
+   */
+  selfCustody: boolean;
 }
 
 export type VaultSurface = "app" | "monitor";
 
 /** Deployment labels, newest first. The read model tags every policy with one of these. */
-export const VAULT_LABELS = ["v4", "v3", "v2"] as const;
+export const VAULT_LABELS = ["v5", "v4", "v3", "v2"] as const;
 
 export type VaultLabel = (typeof VAULT_LABELS)[number];
 
@@ -54,12 +60,22 @@ export type VaultLabel = (typeof VAULT_LABELS)[number];
 export const PRIMARY_VAULT_LABEL: VaultLabel = "v4";
 
 export const VAULTS: Record<VaultLabel, VaultDeployment> = {
+  v5: {
+    label: "v5",
+    env: "POLICY_VAULT_V5_ADDRESS",
+    // Not writable by the server, by design: users sign their own transactions. See D16.
+    writable: false,
+    surfaces: ["app", "monitor"],
+    note: "Non-custodial: each owner signs their own transactions and the vault pays recipients itself.",
+    selfCustody: true,
+  },
   v4: {
     label: "v4",
     env: "POLICY_VAULT_V4_ADDRESS",
     writable: true,
     surfaces: ["app", "monitor"],
-    note: "Current deployment.",
+    note: "Operator deployment on testnet: policies are funded and released through the operator.",
+    selfCustody: false,
   },
   v3: {
     label: "v3",
@@ -70,6 +86,7 @@ export const VAULTS: Record<VaultLabel, VaultDeployment> = {
     // operator can do with it. Showing it would be eight rows that exist only to be refused.
     surfaces: ["monitor"],
     note: "Historical deployment, kept for its onchain proofs. Read-only.",
+    selfCustody: false,
   },
   v2: {
     label: "v2",
@@ -80,11 +97,13 @@ export const VAULTS: Record<VaultLabel, VaultDeployment> = {
     // which lives in the monitor and in RESULTS.md.
     surfaces: ["monitor"],
     note: "Historical deployment, kept for its onchain proofs. Read-only.",
+    selfCustody: false,
   },
 };
 
 /** The env var holding each deployment's address. */
 export const VAULT_ENV_VAR: Record<VaultLabel, string> = {
+  v5: VAULTS.v5.env,
   v4: VAULTS.v4.env,
   v3: VAULTS.v3.env,
   v2: VAULTS.v2.env,
@@ -144,4 +163,13 @@ export function labelForAddress(address: string, env: Record<string, string | un
     if (env[VAULT_ENV_VAR[label]]?.toLowerCase() === target) return label;
   }
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+/** The self-custody deployment (v5 onward), if configured. The keeper's releaser targets it. */
+export function selfCustodyVault(env: Record<string, string | undefined> = process.env): { label: VaultLabel; address: `0x${string}` } | undefined {
+  for (const label of VAULT_LABELS) {
+    const address = env[VAULT_ENV_VAR[label]];
+    if (VAULTS[label].selfCustody && address) return { label, address: address as `0x${string}` };
+  }
+  return undefined;
 }

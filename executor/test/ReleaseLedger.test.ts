@@ -58,7 +58,10 @@ describe.skipIf(!URL_)("ReleaseLedger", { timeout: 60_000 }, () => {
 
   it("gives the keeper time to start before calling a release unpaid", async () => {
     const p = release();
-    await ledger.record(p, new Date());
+    // Stamped a few seconds back: the database compares against its own clock, and this machine's
+    // can run ahead of it. Stamped "now", the zero-threshold check below could see a release from
+    // the database's future and fail for a reason that has nothing to do with the code.
+    await ledger.record(p, new Date(Date.now() - 5_000));
     expect(await listed(p)).toBeUndefined();
     expect((await listed(p, { unpaidAfterSeconds: 0, stuckAfterSeconds: 900 }))?.kind).toBe("unpaid");
   });

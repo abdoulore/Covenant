@@ -15,6 +15,7 @@ import { createPublicClient, http, type PublicClient } from "viem";
 import { chainFor, ARC_DOMAIN } from "../config.js";
 import { labelsFor, VAULTS, type VaultLabel, type VaultSurface } from "./vaults.js";
 import { hermesConfig, hermesAuthMessage } from "../oracle/HermesPythClient.js";
+import { V5_ABI } from "../chain/policyVaultV5.js";
 import { PostgresSettlementStore } from "../store/PostgresSettlementStore.js";
 import { ReleaseLedger } from "../store/ReleaseLedger.js";
 import type { SettlementStoreLike } from "../store/SettlementStore.js";
@@ -74,6 +75,7 @@ export interface ReadModelDeps {
 
 export interface ReadModelOptions {
   rpcUrl: string;
+  v5Address?: string | undefined;
   v4Address?: string | undefined;
   v3Address?: string | undefined;
   v2Address?: string | undefined;
@@ -100,6 +102,7 @@ export function readModelFromOptions(opts: ReadModelOptions): ReadModelDeps {
 
   const listed = new Set(labelsFor(opts.surface ?? "monitor"));
   const vaults = [
+    { label: "v5", address: opts.v5Address, abi: V5_ABI },
     { label: "v4", address: opts.v4Address, abi: policyAbi([...BASE, ...RECURRING, ...ORACLE_PULL]) },
     { label: "v3", address: opts.v3Address, abi: policyAbi([...BASE, ...RECURRING]) },
     { label: "v2", address: opts.v2Address, abi: policyAbi(BASE) },
@@ -146,6 +149,7 @@ async function readPolicies(deps: ReadModelDeps) {
 
     const ids = Array.from({ length: Number(next) }, (_, i) => BigInt(i));
     const rows = await mapWithConcurrency(ids, READ_CONCURRENCY, async (id) => {
+      if (VAULTS[vault.label].selfCustody) return readV5Policy(deps, vault, id);
       try {
         const [p, effective] = await Promise.all([
           deps.client.readContract({ address: vault.address, abi: vault.abi, functionName: "getPolicy", args: [id] }) as Promise<any>,
@@ -180,6 +184,42 @@ async function readPolicies(deps: ReadModelDeps) {
     for (const row of rows) if (row) out.push(row);
   }
   return out;
+}
+
+/**
+ * A v5 policy, in the same shape as the others plus what v5 adds: the owner who funded it, the
+ * deadline that protects its recipient (and that deadline moved out by any pause), and the fee
+ * held for a cross-chain payout. v5 pays USDC only, so payoutCurrency is always USDC.
+ */
+async function readV5Policy(deps: ReadModelDeps, vault: VaultRef, id: bigint) {
+  try {
+    const [p, effective, effectiveDeadline] = await Promise.all([
+      deps.client.readContract({ address: vault.address, abi: V5_ABI, functionName: "getPolicy", args: [id] }) as Promise<any>,
+      deps.client.readContract({ address: vault.address, abi: V5_ABI, functionName: "statusOf", args: [id] }) as Promise<number>,
+      deps.client.readContract({ address: vault.address, abi: V5_ABI, functionName: "effectiveDeadline", args: [id] }) as Promise<bigint>,
+    ]);
+    return {
+      vault: vault.label, address: vault.address, id: id.toString(),
+      writable: false, selfCustody: true,
+      owner: p.owner, recipient: p.recipient, amount: p.amount.toString(), funded: p.funded.toString(),
+      feeAllowance: p.feeAllowance.toString(), maxFeePerTransfer: p.maxFeePerTransfer.toString(),
+      payoutCurrency: "USDC", destinationDomain: p.destinationDomain,
+      conditionType: p.recurring ? (p.isSweep ? "Sweep" : "Recurring") : CONDITION[p.conditionType],
+      status: STATUS[p.status], effectiveStatus: STATUS[effective],
+      deadline: p.deadline.toString(), effectiveDeadline: effectiveDeadline.toString(),
+      releaseTime: p.releaseTime.toString(), threshold: p.threshold, approvalCount: p.approvalCount,
+      attester: p.attester, attested: p.attested,
+      feed: p.feed, comparator: COMPARATOR[p.comparator], oracleThreshold: p.oracleThreshold.toString(),
+      maxStaleSeconds: p.maxStaleSeconds.toString(),
+      adapter: p.adapter, feedId: p.feedId, maxConfBps: p.maxConfBps,
+      recurring: p.recurring, isSweep: p.isSweep,
+      amountPerPeriod: p.amountPerPeriod.toString(), buffer: p.buffer.toString(), minSweep: p.minSweep.toString(),
+      interval: p.interval.toString(), nextDue: p.nextDue.toString(), stoppedAt: p.stoppedAt.toString(),
+      periods: p.periods, periodsReleased: p.periodsReleased,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /** One receipt as the app shows it, whichever store it came from. */

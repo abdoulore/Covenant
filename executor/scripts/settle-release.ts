@@ -31,7 +31,7 @@ import { SettlementEngine } from "../src/SettlementEngine.js";
 import { createLegRunner } from "../src/legs/createLegRunner.js";
 import { CircleWalletProvider } from "../src/wallet/CircleWalletProvider.js";
 import { chainFor, planLegs, ARC_DOMAIN } from "../src/config.js";
-import { VAULT_ENV_VAR, VAULT_LABELS, labelForAddress } from "../src/api/vaults.js";
+import { VAULT_ENV_VAR, VAULT_LABELS, VAULTS, labelForAddress } from "../src/api/vaults.js";
 import { toDecimalString } from "../src/legs/legs.js";
 
 const env = (name: string): string => {
@@ -57,7 +57,11 @@ const client = createPublicClient({
   transport: http(url, { retryCount: 3, retryDelay: 2_000, timeout: 30_000 }),
 }) as PublicClient;
 
-const known = new Set(VAULT_LABELS.map((l) => process.env[VAULT_ENV_VAR[l]]?.toLowerCase()).filter(Boolean));
+// Only vaults whose releases the executor pays. A self-custody vault (v5) has already paid the
+// recipient when it released, so settling one of its releases here would pay them twice.
+const known = new Set(
+  VAULT_LABELS.filter((l) => !VAULTS[l].selfCustody).map((l) => process.env[VAULT_ENV_VAR[l]]?.toLowerCase()).filter(Boolean),
+);
 const ledger = new ReleaseLedger({ connectionString: env("DATABASE_URL") });
 const store = new PostgresSettlementStore({ connectionString: env("DATABASE_URL") });
 
