@@ -64,7 +64,8 @@ export function MainnetApp() {
     <div className="app">
       <header className="topbar">
         <a className="brand" href="/" aria-label="Covenant home">
-          <span className="accent">Covenant</span><span className="sub">on {ARC.name} mainnet</span>
+          <img className="mark" src={`${import.meta.env.BASE_URL}brand/logo-mark.svg`} alt="" width={22} height={22} />
+          <span className="accent with-logo">Covenant</span><span className="sub">on {ARC.name} mainnet</span>
         </a>
         <div className="opstatus"><WalletButton /></div>
       </header>

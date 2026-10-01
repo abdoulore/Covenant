@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Covenant · Pay when it's done</title>
 <meta name="description" content="Lock USDC behind a condition: a date, an approval, a verifier's sign-off, a schedule. The contract pays the moment it is met, on Arc, Base or Arbitrum, and returns it if it never is. Live on Arc mainnet as an unaudited beta." />
+<link rel="icon" href="/app/brand/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/app/brand/apple-touch-icon.png" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://covenant-mainnet.vercel.app/" />
+<meta property="og:title" content="Covenant · Pay when it's done. Not before, and not never." />
+<meta property="og:description" content="Lock USDC behind a condition. The contract pays the moment it is met, on Arc, Base or Arbitrum, and returns it if it never is. Live on Arc mainnet as an unaudited beta." />
+<meta property="og:image" content="https://covenant-mainnet.vercel.app/app/brand/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://covenant-mainnet.vercel.app/app/brand/og.png" />
+<meta name="theme-color" content="#0a0b0d" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -14,7 +26,7 @@
     --paper: #0a0b0d; --card: #101216; --card2: #15181d; --card-soft: #0d0f13;
     --line: rgba(255,255,255,0.09); --line-soft: rgba(255,255,255,0.05);
     --ink: #e7e9ec; --muted: #949aa4; --dim: #626977;
-    --accent: #4bb3a4; --accent-tint: rgba(75,179,164,0.12); --accent-ink: #04120f;
+    --accent: #02D2A1; --accent-tint: rgba(2,210,161,0.12); --accent-ink: #04120f;
     --hold: #d3a03e; --hold-tint: rgba(211,160,62,0.10); --stop: #e0655f;
     --shadow: 0 24px 70px -22px rgba(0,0,0,0.7); --shadow-soft: 0 8px 24px rgba(0,0,0,0.4);
     --r: 16px; --r-sm: 12px;
@@ -34,7 +46,7 @@
 
   nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; position: relative; z-index: 5; }
   .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
-  .brand .d { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .brand .logo { width: 26px; height: 26px; display: block; }
   nav .links { display: flex; gap: 24px; font-size: 13.5px; align-items: center; }
   nav .links a { color: var(--muted); transition: color 0.15s; display: inline-flex; align-items: center; gap: 6px; }
   nav .links a:hover { color: var(--ink); }
@@ -99,7 +111,7 @@
   @media (max-width: 560px) { .uses { grid-template-columns: 1fr; } }
   .use { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 22px; display: flex; flex-direction: column; transition: border-color 0.15s, transform 0.15s; }
   .use:hover { border-color: var(--line); transform: translateY(-2px); }
-  .use.first { border-color: color-mix(in srgb, var(--accent) 34%, transparent); background: linear-gradient(168deg, rgba(75,179,164,0.07), var(--card)); }
+  .use.first { border-color: color-mix(in srgb, var(--accent) 34%, transparent); background: linear-gradient(168deg, rgba(2,210,161,0.07), var(--card)); }
   .use .ui { color: var(--accent); }
   .use h3 { font-size: 16px; font-weight: 600; margin: 14px 0 8px; letter-spacing: -0.015em; }
   .use p { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 0 0 16px; }
@@ -156,7 +168,7 @@
   .fgrid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 32px; }
   @media (max-width: 640px) { .fgrid { grid-template-columns: 1fr 1fr; } }
   .fgrid .fb { font-weight: 600; display: flex; align-items: center; gap: 9px; }
-  .fgrid .fb .d { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
+  .fgrid .fb .logo { width: 22px; height: 22px; display: block; }
   .fgrid .about { color: var(--dim); font-size: 13px; margin-top: 12px; max-width: 38ch; line-height: 1.6; }
   .fgrid .ft { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
   .fgrid ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; font-size: 13.5px; }
@@ -195,7 +207,7 @@
   <div class="glow" style="width:620px;height:620px;right:-120px;top:-180px"></div>
   <div class="wrap">
     <nav>
-      <a class="brand" href="/" aria-label="Covenant home"><span class="d"></span> Covenant</a>
+      <a class="brand" href="/" aria-label="Covenant home"><img class="logo" src="/app/brand/logo-mark.svg" alt="" width="26" height="26" /> Covenant</a>
       <div class="links">
         <a href="#uses">Use cases</a>
         <a href="#how">How it works</a>
@@ -380,7 +392,7 @@
   <div class="wrap">
     <div class="fgrid">
       <div>
-        <div class="fb"><span class="d"></span> Covenant</div>
+        <div class="fb"><img class="logo" src="/app/brand/logo-mark.svg" alt="" width="22" height="22" /> Covenant</div>
         <p class="about">Conditional USDC payments on Arc. Lock it behind a rule; the contract pays when it holds, or returns it when it never does.</p>
       </div>
       <div>

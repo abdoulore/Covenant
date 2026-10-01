@@ -1,3 +1,5 @@
+<p align="center"><img src="app/public/brand/logo-mark.svg" width="96" height="96" alt="Covenant" /></p>
+
 # Covenant
 
 Conditional USDC payments on Arc. Put USDC into a policy from your own wallet, attach a rule for when it may be paid, and the vault pays the recipient itself the moment the rule is met: on Arc, or on Base or Arbitrum through Circle's CCTP. Nobody else can move the money. If the rule is never met, you take it back.
