@@ -1,47 +1,47 @@
 # Walkthrough
 
-Covenant is a programmable treasury engine on Arc. A business locks USDC in an onchain vault with a policy: pay recipient R amount A in currency C on chain D, but only when condition X is met. The moment the condition is met, settlement runs itself across an FX leg and a cross-chain leg. The contract decides whether the money moves; the offchain service only decides how it routes. Everything below is on live testnet, and every number traces to a transaction hash in [RESULTS.md](RESULTS.md).
+Covenant lets you lock USDC behind a condition (a date, an approval, a verifier's sign-off, a schedule) and have a contract pay the recipient the moment it is met, on Arc, Base or Arbitrum. If the condition is never met, the money goes back to whoever funded it. Nobody in between holds it.
 
-If you have ten minutes, look at these two things.
+It is live on Arc mainnet as an unaudited beta, capped at 100 USDC in total. If you have ten minutes, this is the tour.
 
-## 1. A policy that releases on live oracle data
+## 1. The site (one minute)
 
-This is the product's core claim made concrete: the contract, not a server, decides whether a payment fires, and it decides on data anyone can verify.
+Open [covenant-mainnet.vercel.app](https://covenant-mainnet.vercel.app). The panel at the top right is not a mock-up: your browser reads it straight from the vault on Arc mainnet, so it shows how much USDC the vault holds against its cap, and how many policies exist, right now.
 
-The policy is USDC/USD depeg protection. It releases only while USDC holds its peg, checked against a live Pyth price feed, on the same vault as every other proof. Arc testnet publishes no Chainlink push feeds, so the oracle runs on Pyth, a pull oracle deployed on Arc and reachable with no credentials. Pyth's official PythAggregatorV3 adapter exposes the price through the same `AggregatorV3Interface` the condition already reads, so the vault did not change and did not redeploy.
+## 2. The contract (two minutes)
 
-Where to look:
+The vault is [`0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) on Arc mainnet. Its source is verified on Sourcify with an exact match, creation and runtime bytecode both: [repo.sourcify.dev/5042/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7](https://repo.sourcify.dev/5042/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7).
 
-- **The onchain run**, in [RESULTS.md](RESULTS.md) under Oracle: create, a keyless price update (fee 1 wei of native USDC), release, payout, settled in 9.0 seconds. Both failure paths are proven in the same section: a "release only if USDC/USD below 0.99" depeg policy held unmet by a healthy live price, and a stale-price policy refused by the fail-closed staleness guard. Each reverts onchain with status 0. RESULTS.md also records where the fail-closed guarantee does not hold in the deployed vault: a future-dated feed answer reverts the condition read instead of returning false. Safe direction, but not what the guarantee said.
-- **The live panel**: run `npm run dashboard` and read the top panel. It plots the current Pyth USDC/USD price on a gauge against the 0.995 peg floor and the 0.990 depeg trigger, with the release verdict. Real data, updating live.
+Three functions carry the whole idea, in [`contracts/src/PolicyVaultV5.sol`](../contracts/src/PolicyVaultV5.sol):
 
-## 2. A settlement receipt with the measured custody gap
+- **`release`** pays a policy whose condition holds. Anyone may call it; the condition is the only gate, and the money can only go to the recipient.
+- **`cancel`** and **`reclaim`** return the money to the policy's owner: before the deadline while the condition is unmet, or after the deadline whatever was not paid.
+- **`_send`** is where the vault pays: a USDC transfer on Arc, or a CCTP v2 burn with Circle's Forwarding Service for Base and Arbitrum.
 
-The second artifact is the full multi-step settlement, and it is honest about the one trust window it has.
+There is no admin key and no upgrade. The guardian, a 2-of-3 Safe at [`0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a`](https://explorer.arc.io/address/0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a), can pause releases for up to a week and raise the funds cap. It cannot move anyone's money.
 
-A policy releases 0.5 USDC on Arc and pays a recipient on Base Sepolia. The executor burns through CCTP v2, and Circle's forwarder mints directly to the recipient, so the recipient needs no gas token on the destination chain. That recipient wallet has never held a single wei of ETH and was paid anyway.
+## 3. A payment that crossed chains (three minutes)
 
-Where to look:
+Policy 1 on the mainnet vault paid 0.10 USDC to a wallet on Base that held no ETH:
 
-- **The onchain run**, in [RESULTS.md](RESULTS.md) under The canary, Policy 2: release on Arc, then a CCTP burn-and-mint that lands directly on the recipient, settled in 28.8 seconds. Verified by reading the recipient's balance from chain, not from a log: 0.606602 USDC delivered for a 0.5 policy, holding 0 ETH.
-- **The dashboard receipts**: each settlement is shown as funds left the vault at T1, recipient paid at T2, executor held for N seconds. The cross-chain receipt is tagged, so its larger gap is read correctly: it includes bridge attestation time, not just executor custody.
+1. [Created and funded](https://explorer.arc.io/tx/0x6405787ef5a67948809ae9e19218cc0dc4b2c0448c971dac2b5a1c55c4e0e256) in one transaction from the owner's wallet. The owner also paid Circle's forwarding fee, 0.060339 USDC, fixed when the policy was created.
+2. [Released on Arc](https://explorer.arc.io/tx/0xd691b51026dbd5d6c72f64348556413b0ce826933d7cca9a15ab7cd4ba6c7009). In that one transaction the vault burned the USDC through CCTP v2.
+3. [Minted on Base](https://basescan.org/tx/0xc8fe7f99a509f50a827604d19f3ca252dfb283fab58b9bc52fdc5f896b2b1be7), 8 seconds later, by Circle's forwarder. The recipient did nothing and needed no gas: it simply received exactly 0.10 USDC.
 
-Two things a careful reviewer will check, both answered:
+Policy 0 is the same-chain case: [created](https://explorer.arc.io/tx/0x93c9a2e299d4c6ab37684d21f21dbc2a31af8339c216a28e71394c434be61c82), then [released](https://explorer.arc.io/tx/0x6242536b4b1be14621936bdc5d96c1af573f8305774dd2230c7d4f097dfae37b), with the vault transferring the USDC to the recipient inside the release transaction itself.
 
-- **The recipient is never short-changed.** The forwarder fee is deducted from the mint, so the executor grosses up the burn from its own balance. The recipient received more than the policy amount, never less. The fee is flat (0.053301 USDC), not proportional, so at treasury size it is a rounding error.
-- **The custody gap is measured, not hidden.** The vault releases to the executor wallet, which holds the funds for the seconds between release and payout. That window is timestamped on every settlement and shown in the dashboard, rather than glossed over.
+## 4. Try it yourself (four minutes)
 
-## If you have one minute
+With a browser wallet holding a little USDC on Arc mainnet:
 
-Run `npm run dashboard`. The depeg panel shows a live oracle price driving a real release rule. The settlement receipts show real multi-leg payments with the custody gap measured per transaction. Every hash links to the explorer.
+1. Open [the app](https://covenant-mainnet.vercel.app/app/) and connect your wallet.
+2. **New policy from your wallet** → *timelock*: your own second address as recipient, 0.10 USDC, paid on Arc, releasable in three minutes. The review shows exactly what leaves your wallet; you confirm one transaction.
+3. When it is due, open the policy and press **Release**. Anyone could; the contract pays the recipient itself.
 
-## Reproduce it
+Or create one you then cancel, and watch the full amount come back.
 
-```bash
-npm test              # 210 tests, contract and executor
-npm run demo:oracle   # the depeg-protection release on live Pyth data
-npm run canary        # the FX and cross-chain settlements
-npm run dashboard     # the monitor with the depeg panel and the receipts
-```
+## Where to go next
 
-Requires Node 20 or newer, Foundry, and a filled `.env` (copy `.env.example`). Testnet only. Full transaction hashes and explorer links for every claim this project makes are in [RESULTS.md](RESULTS.md).
+- [RESULTS.md](RESULTS.md): every transaction behind every claim, mainnet first, then the full testnet record.
+- [The README](../README.md): what a policy can do, the guardian, and the beta's limits.
+- [OPERATIONS.md](OPERATIONS.md): running the keeper and monitor, and deploying.

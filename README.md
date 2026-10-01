@@ -9,6 +9,7 @@ Conditional USDC payments on Arc. Put USDC into a policy from your own wallet, a
 | **App** | [covenant-mainnet.vercel.app](https://covenant-mainnet.vercel.app) |
 | **Network** | Arc mainnet, chain id 5042 |
 | **Vault** | [`0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) (PolicyVaultV5) |
+| **Source** | verified on Sourcify, exact match: [repo.sourcify.dev/5042/0x6C2F…B3f7](https://repo.sourcify.dev/5042/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) |
 | **Guardian** | [`0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a`](https://explorer.arc.io/address/0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a), a 2-of-3 Safe |
 | **Funds cap** | 100 USDC across all policies, raise-only |
 | **Pays out on** | Arc, Base, Arbitrum |

@@ -2,16 +2,81 @@
 
 Onchain proof for every claim this project makes. Each entry carries a transaction hash and an explorer link. Nothing is listed that has not actually executed.
 
-Network: Arc Testnet (chain id 5042002) and Base Sepolia (84532). Testnet only.
-Run dates: 2026-07-27 (v2), 2026-08-05 (v3), 2026-08-09 (v4).
+This document has two parts:
 
-The vault is immutable, so each change of shape is a new address and the older deployments keep their proofs. This document is organised by deployment for that reason: nothing is deleted or rewritten when a successor ships, because the record of proving something when it shipped is part of what is being claimed.
+- **Mainnet**, first: PolicyVaultV5 on Arc mainnet (chain id 5042), paying out on Arc and Base with real USDC. This is the product.
+- **The testnet record**, after it: everything proven on Arc Testnet (chain id 5042002) and Base Sepolia before mainnet, kept complete and unchanged.
 
-| Deployment | Address | Carries | Status |
+| Deployment | Network | Address | Status |
 | --- | --- | --- | --- |
-| **v4** | [`0x3b50...d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) | everything below, plus the pull oracle with a confidence guard and the correctness fixes | **current**, all public claims link here |
-| v3 | [`0xDC00...7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) | recurring and sweep scheduling | superseded, read-only |
-| v2 | [`0xB702...09D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) | the four condition types and the Pyth oracle | superseded, read-only |
+| **v5** | **Arc mainnet** | [`0x6C2F...B3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) | **live**, unaudited beta, funds cap 100 USDC |
+| v5 | Arc testnet | [`0x87A2...c890`](https://testnet.arcscan.app/address/0x87A204d4eDbE715b00eA05a2Ad860f40b710c890) | the same contract, for its testnet re-proof |
+| v4 | Arc testnet | [`0x3b50...d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) | the operator model, superseded by v5 |
+| v3 | Arc testnet | [`0xDC00...7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) | superseded, read-only |
+| v2 | Arc testnet | [`0xB702...09D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) | superseded, read-only |
+
+---
+
+## Mainnet
+
+Everything in this part is on Arc mainnet and Base mainnet, with real USDC. Values are read back from the chain, from Foundry's broadcast record and from Circle's API, not copied from a terminal.
+
+### The vault
+
+| | |
+| --- | --- |
+| Contract | PolicyVaultV5, [`0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) |
+| Deployed | block 23706907, 2026-10-01 12:09:05 UTC, [`0xcd2a9a43…`](https://explorer.arc.io/tx/0xcd2a9a43d09fdd8cc50d1294f85d870fbce5aa8eed57d0a2bd01c900e323521f) |
+| Deploy cost | 0.1023 USDC (5,115,478 gas). Gas on Arc is USDC, so this is dollars. |
+| Source | verified on Sourcify, **exact match** for both creation and runtime bytecode: [repo.sourcify.dev/5042/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7](https://repo.sourcify.dev/5042/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) |
+
+Its settings, read from the vault after the deploy:
+
+| Setting | Value |
+| --- | --- |
+| Guardian | [`0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a`](https://explorer.arc.io/address/0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a) |
+| Funds cap | 100 USDC, across all policies; can only be raised |
+| Cross-chain destinations | Base (CCTP domain 6) and Arbitrum (domain 3); Arc payouts are direct |
+| USDC | `0x3600000000000000000000000000000000000000` |
+| CCTP TokenMessengerV2 | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`, Circle's mainnet messenger |
+| Held at the time of writing | 0 USDC |
+
+### The guardian
+
+A Safe (SafeL2 1.5.0, the canonical deployment Safe lists for Arc), threshold **2 of 3**, with no modules and no guard, so only its owners can act through it. Owners: `0xB880C90a0fb577c2a12414Cd9209793771225c16`, `0x04519d3FcDb8929D1dEe31C872e0f2740DBcD3E1`, `0x1046b689d81488340a0d460AA31cAF2c0a47c1aF`. None is a key the Covenant server or keeper holds.
+
+What the guardian can do is in the contract: pause releases for up to 7 days, then wait 7 days after a pause ends before pausing again; raise the funds cap; hand the role on or give it up. Every deadline moves out by the time spent paused. It cannot move, redirect or freeze funds, and owners can still cancel unmet policies and reclaim during a pause.
+
+### Smoke test: two payouts
+
+Run from the public site, [covenant-mainnet.vercel.app](https://covenant-mainnet.vercel.app), on 2026-10-01. Each policy was created and funded in one transaction through Arc's Multicall3From, which approves the exact amount and creates the policy as the owner.
+
+| Step | Time (UTC) | Transaction |
+| --- | --- | --- |
+| Policy 0 created: 0.10 USDC, paid on Arc | 20:46:44 | [`0x93c9a2e2…`](https://explorer.arc.io/tx/0x93c9a2e299d4c6ab37684d21f21dbc2a31af8339c216a28e71394c434be61c82) |
+| Policy 0 released: the vault transferred 0.10 USDC to the recipient | 20:50:59 | [`0x6242536b…`](https://explorer.arc.io/tx/0x6242536b4b1be14621936bdc5d96c1af573f8305774dd2230c7d4f097dfae37b) |
+| Policy 1 created: 0.10 USDC, paid on Base, fee fixed at 0.060339 USDC | 20:52:43 | [`0x6405787e…`](https://explorer.arc.io/tx/0x6405787ef5a67948809ae9e19218cc0dc4b2c0448c971dac2b5a1c55c4e0e256) |
+| Policy 1 released: the vault burned through CCTP v2 with the Forwarding Service | 20:59:15 | [`0xd691b510…`](https://explorer.arc.io/tx/0xd691b51026dbd5d6c72f64348556413b0ce826933d7cca9a15ab7cd4ba6c7009) |
+| 0.10 USDC minted to the recipient on Base | 20:59:23 | [`0xc8fe7f99…`](https://basescan.org/tx/0xc8fe7f99a509f50a827604d19f3ca252dfb283fab58b9bc52fdc5f896b2b1be7) |
+
+- **Settled on Base 8 seconds after the release.** The recipient received exactly 0.10 USDC while holding 0 ETH: the forwarder submitted the mint and was paid from the fee the owner fixed on the policy, never from the recipient's amount.
+- **The Arc payout shows two transfer logs** for one payment: Arc records USDC movements in both its 18-decimal native view and its 6-decimal token view (EIP-7708 system logs). They are the same 0.10 USDC.
+- **Books:** after both releases, the vault's USDC balance equalled `totalHeld`, and both were 0.
+- **Accounts:** the owner was the mainnet deployer `0xB7911138966E81e72F2384338C1f9b5495e5648a`, which has no role in the vault after deploying it, and the recipient `0xB880C90a0fb577c2a12414Cd9209793771225c16` is one of the Safe's owners. Both are ordinary wallets as far as the vault is concerned; it is recorded here because a reader comparing addresses will notice.
+
+### Known limits
+
+- The vault is **not audited**. The funds cap bounds what is at risk until it is.
+- Price conditions (Chainlink, and signed price proofs) are in the contract but not offered by the app. Pyth, the signed-price provider proven on testnet, is not deployed on Arc mainnet.
+- Arc enforces USDC's blocklist at runtime: a payout to a blocklisted recipient reverts, and the owner reclaims after the deadline.
+
+---
+
+# The testnet record
+
+Everything below ran on **Arc Testnet** (chain id 5042002) and **Base Sepolia** (84532), with test USDC, before mainnet. Run dates: 2026-07-27 (v2), 2026-08-05 (v3), 2026-08-09 (v4). It is kept complete and unchanged: the record of proving something when it shipped is part of what is being claimed.
+
+The vault is immutable, so each change of shape is a new address and the older deployments keep their proofs. This record is organised by deployment for that reason: nothing is deleted or rewritten when a successor ships.
 
 All twelve capabilities are re-proven on v4, below. The sections after the v4 material are the v2 and v3 record, kept complete and unchanged.
 
