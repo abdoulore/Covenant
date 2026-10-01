@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { Policy } from "../api";
 import { agoIso, usdc } from "../lib";
 import { ARC, V5_VAULT } from "../v5/chain";
@@ -28,12 +28,19 @@ export function MainnetApp() {
   const [mine, setMine] = useState(false);
   const vault = V5_VAULT;
 
+  // Only the newest read may change the screen. A read started before the wallet reconnected can
+  // finish after a newer one through the wallet, and its stale failure must not overwrite that.
+  const latest = useRef(0);
   const load = useCallback(async () => {
     if (!vault) return;
+    const ticket = ++latest.current;
     try {
-      setView(await readVault(vault, "mainnet", w.chainId === ARC.id ? w.wallet?.provider : undefined));
+      const v = await readVault(vault, "mainnet", w.chainId === ARC.id ? w.wallet?.provider : undefined);
+      if (ticket !== latest.current) return;
+      setView(v);
       setError(null);
     } catch (e) {
+      if (ticket !== latest.current) return;
       setError((e as Error).message);
     }
   }, [vault, w.wallet, w.chainId]);
@@ -92,7 +99,9 @@ export function MainnetApp() {
             </div>
           </div>
           <div style={{ marginTop: 14 }}>
-            {!view && !error ? <div className="state-msg">Reading the vault…</div> : <PoliciesTable policies={policies} onSelect={setSelected} />}
+            {!view && !error ? <div className="state-msg">Reading the vault…</div>
+              : view && !policies.length ? <div className="state-msg">{mine ? "No policies involve your wallet yet." : "No policies yet. Be the first: create one from your wallet."}</div>
+              : <PoliciesTable policies={policies} onSelect={setSelected} />}
           </div>
         </section>
       </main>
