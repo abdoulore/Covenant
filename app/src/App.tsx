@@ -9,7 +9,7 @@ import { Approvals } from "./components/Approvals";
 import { System } from "./components/System";
 import { Icon } from "./components/Icon";
 import { WalletButton } from "./components/WalletButton";
-import { resolveV5Vault, V5_VAULT } from "./v5/chain";
+import { IS_MAINNET, resolveV5Vault, V5_VAULT } from "./v5/chain";
 
 type Tab = "overview" | "policies" | "approvals" | "settlements" | "system";
 type Modal = null | "login" | "create" | "v5create";
@@ -36,7 +36,14 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: "system", icon: "cpu", label: "System" },
 ];
 
+// The mainnet build is its own screen, loaded only in that build (see src/v5/chain.ts).
+const MainnetApp = lazy(() => import("./components/MainnetApp").then((m) => ({ default: m.MainnetApp })));
+
 export function App() {
+  return IS_MAINNET ? <Suspense fallback={null}><MainnetApp /></Suspense> : <TestnetApp />;
+}
+
+function TestnetApp() {
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");

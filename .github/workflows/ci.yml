@@ -75,3 +75,8 @@ jobs:
 
       - name: App build and bundle secret check
         run: npm --prefix app run build
+
+      # The mainnet build is a separate bundle (Vite mode "mainnet"): chain 5042, the mainnet vault,
+      # Circle's production API. Built here so a change cannot break it unnoticed.
+      - name: App mainnet build and bundle secret check
+        run: npm --prefix app run build:mainnet

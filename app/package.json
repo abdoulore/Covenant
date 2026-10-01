@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build && npm run check:secrets",
     "check:secrets": "node scripts/check-bundle-secrets.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:mainnet": "vite --mode mainnet",
+    "build:mainnet": "tsc --noEmit && vite build --mode mainnet && npm run check:secrets"
   },
   "dependencies": {
     "react": "^18.3.1",
