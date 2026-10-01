@@ -31,12 +31,12 @@ export function MainnetApp() {
   const load = useCallback(async () => {
     if (!vault) return;
     try {
-      setView(await readVault(vault, "mainnet"));
+      setView(await readVault(vault, "mainnet", w.chainId === ARC.id ? w.wallet?.provider : undefined));
       setError(null);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [vault]);
+  }, [vault, w.wallet, w.chainId]);
 
   useEffect(() => {
     load();
@@ -71,7 +71,13 @@ export function MainnetApp() {
           <div className="notice err">The guardian has paused payouts. You can still cancel unmet policies and take your money back.</div>
         )}
         {!vault && <div className="notice err">This build has no mainnet vault configured.</div>}
-        {error && <div className="notice err">Cannot read the vault from {ARC.name}: {error}</div>}
+        {error && (
+          <div className="notice err">
+            Cannot read the vault from {ARC.name}: every public connection failed{w.wallet ? "" : ", and no wallet is connected to try instead"}.
+            If your browser blocks trackers (Brave Shields, for example), allow this site or connect your wallet.
+            <div className="reason">{error.split("\n")[0]}</div>
+          </div>
+        )}
 
         <section>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>

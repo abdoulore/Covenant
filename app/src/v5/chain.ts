@@ -47,6 +47,15 @@ export const MULTICALL3_FROM = "0x522fAf9A91c41c443c66765030741e4AaCe147D0" as c
 /** Arc's mempool drops, without a receipt, any transaction offering less than this (EVM differences). */
 export const MIN_MAX_FEE_PER_GAS = 20_000_000_000n;
 
+/**
+ * Every public RPC Arc lists for reading (docs.arc.io, RPC Endpoints): Circle's own first, then the
+ * keyless third-party providers. Reads fall through them in order, so one endpoint being down, or
+ * blocked by a browser's privacy shield, does not leave the app blank.
+ */
+export const READ_RPCS = IS_MAINNET
+  ? ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io"]
+  : ["https://rpc.testnet.arc.io", "https://rpc.quicknode.testnet.arc.io", "https://rpc.blockdaemon.testnet.arc.io", "https://rpc.drpc.testnet.arc.io"];
+
 export const ARC_DOMAIN = 26;
 
 /** USDC's ERC-20 face on Arc, the same address on both networks: 6 decimals, EIP-2612 permit. */
