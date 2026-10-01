@@ -14,7 +14,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const distDir = join(here, "..", "dist");
+// The output folder to scan: dist by default, dist-mainnet for the mainnet build.
+const distDir = join(here, "..", process.argv[2] ?? "dist");
 const envPath = join(here, "..", "..", ".env");
 
 function walk(dir) {
@@ -28,7 +29,7 @@ function walk(dir) {
 }
 
 if (!existsSync(distDir)) {
-  console.error("check-bundle-secrets: dist/ not found. Run `vite build` first.");
+  console.error(`check-bundle-secrets: ${distDir} not found. Run the build first.`);
   process.exit(1);
 }
 
@@ -65,4 +66,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log(`Bundle secret check: scanned ${files.length} files in dist/, no secret material found.`);
+console.log(`Bundle secret check: scanned ${files.length} files in ${process.argv[2] ?? "dist"}/, no secret material found.`);

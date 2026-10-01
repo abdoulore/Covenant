@@ -8,16 +8,17 @@ import react from "@vitejs/plugin-react";
 // on a non-default port.
 const apiTarget = process.env.COVENANT_API_TARGET ?? "http://localhost:4320";
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   /**
    * The production bundle is served under /app on the same host as the landing page, so its asset
    * URLs have to be prefixed or the browser requests them from the root and gets the landing page's
    * HTML back with a JavaScript content type.
    *
    * Only on build. The dev server serves at the root and proxies /api, and prefixing there would
-   * break both.
+   * break both. The mainnet build (mode "mainnet") is its own site, deployed by a separate Vercel
+   * project from the `mainnet` branch (app/vercel.json), so it is served from the root.
    */
-  base: command === "build" ? "/app/" : "/",
+  base: command === "build" && mode !== "mainnet" ? "/app/" : "/",
   plugins: [react()],
   server: {
     port: 5173,
@@ -25,5 +26,5 @@ export default defineConfig(({ command }) => ({
       "/api": { target: apiTarget, changeOrigin: true },
     },
   },
-  build: { outDir: "dist", sourcemap: false },
+  build: { outDir: mode === "mainnet" ? "dist-mainnet" : "dist", sourcemap: false },
 }));

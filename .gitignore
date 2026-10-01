@@ -12,6 +12,7 @@ contracts/broadcast/*/dry-run/
 # Node
 node_modules/
 dist/
+dist-mainnet/
 *.tsbuildinfo
 
 # Executor state
