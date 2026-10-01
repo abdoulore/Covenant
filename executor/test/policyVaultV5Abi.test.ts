@@ -66,4 +66,12 @@ describe("the app's pinned v5 vault", () => {
     const pinned = readFileSync(join(root, "app/src/v5/chain.ts"), "utf8").match(/V5_TESTNET_VAULT = "(0x[0-9a-fA-F]{40})"/)?.[1];
     expect(pinned?.toLowerCase()).toBe(deployed.toLowerCase());
   });
+
+  it("is the address in the mainnet broadcast record, for the mainnet build", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+    const run = JSON.parse(readFileSync(join(root, "contracts/broadcast/DeployPolicyVaultV5.s.sol/5042/run-latest.json"), "utf8"));
+    const deployed = run.transactions.find((t: any) => t.contractName === "PolicyVaultV5").contractAddress;
+    const pinned = readFileSync(join(root, "app/src/v5/chain.ts"), "utf8").match(/V5_MAINNET_VAULT = "(0x[0-9a-fA-F]{40})"/)?.[1];
+    expect(pinned?.toLowerCase()).toBe(deployed.toLowerCase());
+  });
 });

@@ -271,8 +271,8 @@ export function V5CreatePolicy({ vault, onClose, onCreated }: { vault: `0x${stri
               <KV k="Your wallet holds" v={usdc(String(plan.balance))} />
             </div>
             <p className="hint">
-              Your wallet will ask you to sign a USDC permit for exactly {usdc(String(pull))} to the vault, then to send one
-              transaction that spends it and creates the policy.
+              Your wallet will ask you to confirm one transaction that approves exactly {usdc(String(pull))} for the vault and
+              creates the policy, both in the same step. Some wallets ask for a USDC permit signature first instead.
             </p>
             {plan.balance < pull && <div className="notice err">Your wallet holds less USDC than this needs.</div>}
             {err && <div className="notice err">{err.message}{err.reason && <div className="reason">{err.reason}</div>}</div>}

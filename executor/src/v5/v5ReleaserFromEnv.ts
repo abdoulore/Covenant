@@ -6,9 +6,12 @@
  * nothing else: losing it costs that and no more.
  */
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, http, parseAbi,
-  type PublicClient, type WalletClient,
+  BaseError, ContractFunctionRevertedError, WaitForTransactionReceiptTimeoutError, createPublicClient, createWalletClient,
+  http, parseAbi, type PublicClient, type WalletClient,
 } from "viem";
+
+/** Arc's minimum maxFeePerGas: lower offers are dropped by the mempool without a receipt. */
+const ARC_MIN_MAX_FEE_PER_GAS = 20_000_000_000n;
 import { privateKeyToAccount } from "viem/accounts";
 import { chainFor, ARC_DOMAIN } from "../config.js";
 import { V5_ABI, V5_ERRORS } from "../chain/policyVaultV5.js";
@@ -36,8 +39,19 @@ export class ViemV5Chain implements V5Chain {
         args: call.args as any,
         ...("value" in call ? { value: call.value } : {}),
       } as any);
-      const hash = await this.wallet.writeContract(request as any);
-      const receipt = await this.client.waitForTransactionReceipt({ hash });
+      // Arc's mempool drops, without a receipt, anything offering under 20 gwei (docs.arc.io, EVM
+      // differences), so the keeper never offers less, and never waits for a receipt indefinitely.
+      const f = await this.client.estimateFeesPerGas();
+      const maxFeePerGas = f.maxFeePerGas > ARC_MIN_MAX_FEE_PER_GAS ? f.maxFeePerGas : ARC_MIN_MAX_FEE_PER_GAS;
+      const tip = f.maxPriorityFeePerGas ?? 0n;
+      const hash = await this.wallet.writeContract({ ...(request as any), maxFeePerGas, maxPriorityFeePerGas: tip < maxFeePerGas ? tip : maxFeePerGas });
+      let receipt;
+      try {
+        receipt = await this.client.waitForTransactionReceipt({ hash, timeout: 90_000 });
+      } catch (err) {
+        if (err instanceof WaitForTransactionReceiptTimeoutError) return { sent: false, reason: `not included after 90s, possibly dropped: ${hash}` };
+        throw err;
+      }
       if (receipt.status !== "success") return { sent: false, reason: `reverted onchain in ${hash}` };
       return { sent: true, hash };
     } catch (err) {

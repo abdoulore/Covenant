@@ -17,6 +17,8 @@ interface ImportMetaEnv {
    * server cannot redirect a user's money. Unset uses the deployment pinned in src/v5/chain.ts.
    */
   readonly VITE_POLICY_VAULT_V5_ADDRESS?: string;
+  /** "mainnet" builds for Arc mainnet; anything else, or unset, for Arc testnet. See src/v5/chain.ts. */
+  readonly VITE_ARC_NETWORK?: string;
 }
 
 interface ImportMeta {

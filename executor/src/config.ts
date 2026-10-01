@@ -45,7 +45,7 @@ export const CHAINS: Record<number, ChainConfig> = {
     name: "Arc Testnet",
     nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
     appKitChain: "Arc_Testnet",
-    explorerTxUrl: (hash) => `https://testnet.arcscan.app/tx/${hash}`,
+    explorerTxUrl: (hash) => `https://explorer.testnet.arc.io/tx/${hash}`,
     payoutCurrencies: ["USDC", "EURC"],
     swapSupported: true,
   },
