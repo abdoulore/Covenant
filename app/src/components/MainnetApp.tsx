@@ -45,6 +45,9 @@ export function MainnetApp() {
     }
   }, [vault, w.wallet, w.chainId]);
 
+  // Both builds share index.html, whose title names the testnet operator app.
+  useEffect(() => { document.title = "Covenant · app"; }, []);
+
   useEffect(() => {
     load();
     const t = setInterval(load, 15_000);

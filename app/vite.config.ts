@@ -16,9 +16,10 @@ export default defineConfig(({ command, mode }) => ({
    *
    * Only on build. The dev server serves at the root and proxies /api, and prefixing there would
    * break both. The mainnet build (mode "mainnet") is its own site, deployed by a separate Vercel
-   * project from the `mainnet` branch (app/vercel.json), so it is served from the root.
+   * project from the `mainnet` branch (app/vercel.json): the landing page at its root
+   * (app/landing, placed by scripts/assemble-mainnet.mjs) and this app under /app, as on testnet.
    */
-  base: command === "build" && mode !== "mainnet" ? "/app/" : "/",
+  base: command === "build" ? "/app/" : "/",
   plugins: [react()],
   server: {
     port: 5173,
@@ -26,5 +27,5 @@ export default defineConfig(({ command, mode }) => ({
       "/api": { target: apiTarget, changeOrigin: true },
     },
   },
-  build: { outDir: mode === "mainnet" ? "dist-mainnet" : "dist", sourcemap: false },
+  build: { outDir: mode === "mainnet" ? "dist-mainnet/app" : "dist", sourcemap: false },
 }));

@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Covenant · Pay when it's done</title>
+<meta name="description" content="Lock USDC behind a condition: a date, an approval, a verifier's sign-off, a schedule. The contract pays the moment it is met, on Arc, Base or Arbitrum, and returns it if it never is. Live on Arc mainnet as an unaudited beta." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* Same identity as the app: Space Grotesk and JetBrains Mono, one accent, functional status colors. */
+  :root {
+    --paper: #0a0b0d; --card: #101216; --card2: #15181d; --card-soft: #0d0f13;
+    --line: rgba(255,255,255,0.09); --line-soft: rgba(255,255,255,0.05);
+    --ink: #e7e9ec; --muted: #949aa4; --dim: #626977;
+    --accent: #4bb3a4; --accent-tint: rgba(75,179,164,0.12); --accent-ink: #04120f;
+    --hold: #d3a03e; --hold-tint: rgba(211,160,62,0.10); --stop: #e0655f;
+    --shadow: 0 24px 70px -22px rgba(0,0,0,0.7); --shadow-soft: 0 8px 24px rgba(0,0,0,0.4);
+    --r: 16px; --r-sm: 12px;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Space Grotesk", -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden; letter-spacing: -0.006em; }
+  a { color: inherit; text-decoration: none; }
+  .mono { font-family: var(--mono); }
+  ::selection { background: var(--accent-tint); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  .ic { width: 18px; height: 18px; display: inline-block; vertical-align: middle; flex: none; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; position: relative; z-index: 5; }
+  .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
+  .brand .d { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  nav .links { display: flex; gap: 24px; font-size: 13.5px; align-items: center; }
+  nav .links a { color: var(--muted); transition: color 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  nav .links a:hover { color: var(--ink); }
+  nav .links a.app { color: var(--ink); border: 1px solid var(--line); background: rgba(255,255,255,0.02); border-radius: 999px; padding: 7px 15px; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  nav .links a.app:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+  nav .links a.app .ic { width: 14px; height: 14px; }
+  @media (max-width: 620px) { nav .links a:not(.app) { display: none; } }
+
+  /* hero */
+  .hero-wrap { position: relative; overflow: hidden; }
+  .grid-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 54px 54px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 55% at 60% 0%, #000 30%, transparent 76%); mask-image: radial-gradient(ellipse 75% 55% at 60% 0%, #000 30%, transparent 76%); }
+  .glow { position: absolute; z-index: 0; pointer-events: none; border-radius: 999px; background: radial-gradient(closest-side, var(--accent-tint), transparent 72%); }
+  .hero { position: relative; z-index: 1; display: grid; grid-template-columns: 1.2fr 0.9fr; gap: 48px; align-items: center; padding: 8vh 0 9vh; }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 38px; padding: 5vh 0 7vh; } }
+  .chip { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); background: rgba(255,255,255,0.02); border-radius: 999px; padding: 6px 13px; }
+  .chip .d { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .chip .beta { color: var(--hold); }
+  h1 { font-size: clamp(2.6rem, 6vw, 4.3rem); font-weight: 600; letter-spacing: -0.045em; line-height: 1.02; margin: 22px 0 24px; text-wrap: balance; }
+  h1 .g { color: var(--accent); display: block; }
+  .lede { color: var(--muted); font-size: clamp(1rem, 1.4vw, 1.12rem); line-height: 1.62; max-width: 46ch; margin: 0 0 30px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn { font-size: 13.5px; font-weight: 500; padding: 11px 19px; border-radius: 999px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; box-shadow: 0 0 30px -8px var(--accent); }
+  .btn.primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn.ghost { border: 1px solid var(--line); color: var(--ink); }
+  .btn.ghost:hover { background: var(--card); border-color: var(--muted); }
+  .btn .ic { width: 16px; height: 16px; }
+
+  /* the live vault, read from Arc mainnet */
+  .vault { background: linear-gradient(168deg, var(--card2), var(--card-soft)); border: 1px solid var(--line); border-radius: var(--r); padding: 22px 24px 20px; box-shadow: var(--shadow); }
+  .vault .top { display: flex; justify-content: space-between; align-items: center; }
+  .vault .cap { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+  .live-tag { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 7px; }
+  .live-tag.off { color: var(--dim); }
+  .ping { position: relative; width: 7px; height: 7px; }
+  .ping::before, .ping::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: currentColor; }
+  .ping::after { animation: ping 1.7s cubic-bezier(0,0,.2,1) infinite; }
+  @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+  .vault .big { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: clamp(2.1rem, 3.4vw, 2.7rem); font-weight: 500; letter-spacing: -0.03em; line-height: 1; margin: 18px 0 6px; }
+  .vault .big .of { color: var(--dim); font-size: 0.55em; }
+  .vault .sub { color: var(--muted); font-size: 12.5px; }
+  .bar { height: 6px; border-radius: 6px; background: var(--card); border: 1px solid var(--line-soft); margin: 16px 0 4px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 6px; transition: width 0.8s cubic-bezier(.4,0,.2,1); }
+  .vrows { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: grid; gap: 8px; font-size: 12.5px; }
+  .vrows .r { display: flex; justify-content: space-between; gap: 12px; }
+  .vrows .k { color: var(--dim); } .vrows .v { font-family: var(--mono); color: var(--muted); text-align: right; }
+  .vrows .v a { color: var(--accent); }
+  .vault .note { font-size: 11.5px; color: var(--dim); margin-top: 14px; line-height: 1.5; }
+
+  section { padding: 76px 0; border-top: 1px solid var(--line-soft); }
+  .lead { margin-bottom: 38px; max-width: 64ch; }
+  .lead .eyebrow { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); }
+  .lead h2 { font-size: clamp(1.6rem, 2.8vw, 2.15rem); font-weight: 600; letter-spacing: -0.03em; margin: 12px 0 10px; line-height: 1.12; text-wrap: balance; }
+  .lead p { color: var(--muted); font-size: 14.5px; margin: 0; }
+
+  /* use cases */
+  .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .uses { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .uses { grid-template-columns: 1fr; } }
+  .use { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 22px; display: flex; flex-direction: column; transition: border-color 0.15s, transform 0.15s; }
+  .use:hover { border-color: var(--line); transform: translateY(-2px); }
+  .use.first { border-color: color-mix(in srgb, var(--accent) 34%, transparent); background: linear-gradient(168deg, rgba(75,179,164,0.07), var(--card)); }
+  .use .ui { color: var(--accent); }
+  .use h3 { font-size: 16px; font-weight: 600; margin: 14px 0 8px; letter-spacing: -0.015em; }
+  .use p { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 0 0 16px; }
+  .use .rule { margin-top: auto; font-family: var(--mono); font-size: 11.5px; color: var(--dim); border-top: 1px solid var(--line-soft); padding-top: 12px; }
+  .use .rule b { color: var(--muted); font-weight: 500; }
+
+  /* how it works */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px 28px; }
+  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+  .step .head { display: flex; align-items: center; gap: 12px; }
+  .step .n { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .step .line { height: 1px; flex: 1; background: linear-gradient(90deg, var(--line), transparent); }
+  @media (max-width: 800px) { .step .line { display: none; } }
+  .step h3 { font-size: 17px; font-weight: 600; margin: 18px 0 8px; letter-spacing: -0.01em; }
+  .step p { color: var(--muted); font-size: 13.8px; line-height: 1.6; margin: 0; }
+  .conds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .conds span { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
+
+  /* trust */
+  .trust { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 700px) { .trust { grid-template-columns: 1fr; } }
+  .t { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 22px 24px; display: grid; grid-template-columns: auto 1fr; gap: 16px; }
+  .t .ti { color: var(--accent); margin-top: 2px; }
+  .t h3 { font-size: 15.5px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .t p { color: var(--muted); font-size: 13.5px; line-height: 1.58; margin: 0; }
+
+  /* proof */
+  .ledger { border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(168deg, var(--card2), var(--card-soft)); overflow: hidden; box-shadow: var(--shadow); }
+  .ledger .lh { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--dim); }
+  .ledger .lh .pill { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); background: var(--accent-tint); border-radius: 999px; padding: 3px 10px; }
+  .ledger .lr { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 13px 20px; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; align-items: baseline; }
+  .ledger .lr:last-child { border-bottom: none; }
+  .ledger .lr .what { color: var(--ink); }
+  .ledger .lr .what .s { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; }
+  .ledger .lr a { font-family: var(--mono); font-size: 12.5px; color: var(--accent); white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+  .ledger .lr a .ic { width: 13px; height: 13px; }
+  @media (max-width: 560px) { .ledger .lr { grid-template-columns: 1fr; gap: 6px; } }
+  .addrs { display: flex; gap: 34px; flex-wrap: wrap; margin-top: 24px; }
+  .addrs .k { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+  .addrs .v { font-family: var(--mono); font-size: 12.5px; margin-top: 5px; word-break: break-all; } .addrs .v a { color: var(--accent); }
+
+  /* limits */
+  .limits { border: 1px solid color-mix(in srgb, var(--hold) 38%, transparent); background: var(--hold-tint); border-radius: var(--r-sm); padding: 22px 24px; }
+  .limits h3 { color: var(--hold); font-size: 15px; margin: 0 0 10px; font-weight: 600; }
+  .limits ul { margin: 0; padding-left: 18px; color: var(--ink); font-size: 13.8px; line-height: 1.7; }
+  .limits li { margin: 2px 0; } .limits li span { color: var(--muted); }
+
+  .final { position: relative; overflow: hidden; text-align: center; padding: 96px 0; }
+  .final h2 { font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 600; letter-spacing: -0.035em; margin: 0 0 16px; text-wrap: balance; }
+  .final p { color: var(--muted); max-width: 46ch; margin: 0 auto 30px; font-size: 15px; }
+  .final .cta { justify-content: center; }
+
+  footer { border-top: 1px solid var(--line-soft); padding: 48px 0 56px; }
+  .fgrid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 32px; }
+  @media (max-width: 640px) { .fgrid { grid-template-columns: 1fr 1fr; } }
+  .fgrid .fb { font-weight: 600; display: flex; align-items: center; gap: 9px; }
+  .fgrid .fb .d { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
+  .fgrid .about { color: var(--dim); font-size: 13px; margin-top: 12px; max-width: 38ch; line-height: 1.6; }
+  .fgrid .ft { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+  .fgrid ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; font-size: 13.5px; }
+  .fgrid ul a { color: var(--muted); transition: color 0.15s; }
+  .fgrid ul a:hover { color: var(--ink); }
+  .fbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 38px; padding-top: 22px; border-top: 1px solid var(--line-soft); color: var(--dim); font-size: 12.5px; }
+
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.6,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .ping::after, .bar > i { animation: none; transition: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
+</defs></svg>
+
+<div class="hero-wrap">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:620px;height:620px;right:-120px;top:-180px"></div>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="/" aria-label="Covenant home"><span class="d"></span> Covenant</a>
+      <div class="links">
+        <a href="#uses">Use cases</a>
+        <a href="#how">How it works</a>
+        <a href="#proof">Proof</a>
+        <a href="https://github.com/abdoulore/Covenant" target="_blank" rel="noopener">Code</a>
+        <a class="app" href="/app/">Open the app <svg class="ic"><use href="#i-arrow"/></svg></a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <span class="chip"><span class="d"></span> Live on Arc mainnet · <span class="beta">unaudited beta</span></span>
+        <h1>Pay when it's done. <span class="g">Not before, and not never.</span></h1>
+        <p class="lede">Lock USDC behind a condition: a date, an approval, a verifier's sign-off, a schedule. The contract pays the moment it is met, on Arc, Base or Arbitrum, and returns the money if it never is. Nobody in between can touch it.</p>
+        <div class="cta">
+          <a class="btn primary" href="/app/">Open the app <svg class="ic"><use href="#i-arrow"/></svg></a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+      </div>
+
+      <aside class="vault" aria-live="polite">
+        <div class="top">
+          <span class="cap">The vault, right now</span>
+          <span class="live-tag off" id="live"><span class="ping"></span> <span id="live-text">reading Arc…</span></span>
+        </div>
+        <div class="big"><span id="held">–</span> <span class="of">of <span id="cap">100</span> USDC</span></div>
+        <div class="sub">held for recipients across every policy. The vault can never hold more than its cap.</div>
+        <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+        <div class="vrows">
+          <div class="r"><span class="k">Policies created</span><span class="v" id="count">–</span></div>
+          <div class="r"><span class="k">Payouts</span><span class="v" id="paused">–</span></div>
+          <div class="r"><span class="k">Contract</span><span class="v"><a href="https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7" target="_blank" rel="noopener">0x6C2F…B3f7</a></span></div>
+        </div>
+        <div class="note">Read live from the contract on Arc mainnet, in your browser. No Covenant server is involved.</div>
+      </aside>
+    </header>
+  </div>
+</div>
+
+<section id="uses">
+  <div class="wrap">
+    <div class="lead reveal">
+      <div class="eyebrow">What people use it for</div>
+      <h2>Any payment that should wait for something.</h2>
+      <p>Each of these is a policy you create from your own wallet in one transaction. The rule is enforced by the contract, so neither side has to trust the other, or us.</p>
+    </div>
+    <div class="uses reveal">
+      <article class="use first">
+        <svg class="ic ui"><use href="#i-users"/></svg>
+        <h3>Grant milestones</h3>
+        <p>A funder locks each tranche up front. It pays out when enough of the named reviewers approve the milestone, and goes back to the funder if they never do.</p>
+        <div class="rule"><b>Approval</b> · 2 of 3 reviewers</div>
+      </article>
+      <article class="use">
+        <svg class="ic ui"><use href="#i-box"/></svg>
+        <h3>Supplier payments on delivery</h3>
+        <p>The buyer locks the invoice, so the supplier knows the money exists. It pays the moment delivery is confirmed, not thirty days later.</p>
+        <div class="rule"><b>Approval</b> or <b>sign-off</b> on delivery</div>
+      </article>
+      <article class="use">
+        <svg class="ic ui"><use href="#i-pen"/></svg>
+        <h3>Work checked by a verifier</h3>
+        <p>Name someone both sides trust to confirm the work: a reviewer, an inspection service, or an AI agent with its own wallet. Their signature releases the payment, and it can only ever go to the recipient.</p>
+        <div class="rule"><b>Attestation</b> · one named verifier</div>
+      </article>
+      <article class="use">
+        <svg class="ic ui"><use href="#i-repeat"/></svg>
+        <h3>Contributor payroll, across chains</h3>
+        <p>Set an amount and an interval once. Every period is paid to the contributor, on Base or Arbitrum if that is where they are, with no gas needed. Stop any time; periods already owed are still paid.</p>
+        <div class="rule"><b>Payroll</b> · fixed or open-ended</div>
+      </article>
+      <article class="use">
+        <svg class="ic ui"><use href="#i-clock"/></svg>
+        <h3>Vesting and dated releases</h3>
+        <p>Money promised for a date is paid on that date. Nobody can release it early, and nobody can hold it back.</p>
+        <div class="rule"><b>Timelock</b> · pays from a set time</div>
+      </article>
+      <article class="use">
+        <svg class="ic ui"><use href="#i-layers"/></svg>
+        <h3>Treasury sweeps</h3>
+        <p>Keep a working buffer and move everything above it to another wallet, on a schedule, without anyone having to remember.</p>
+        <div class="rule"><b>Sweep</b> · above a buffer, every interval</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="lead reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>Lock it, set the rule, and the contract does the rest.</h2>
+      <p>You need a browser wallet and some USDC on Arc. USDC is also Arc's gas, so there is nothing else to hold.</p>
+    </div>
+    <div class="steps reveal">
+      <div class="step">
+        <div class="head"><span class="n">1</span><span class="line"></span></div>
+        <h3>Lock the money</h3>
+        <p>From your own wallet, in one transaction: it approves exactly the amount and creates the policy together. You choose the recipient, where they are paid, and a deadline.</p>
+      </div>
+      <div class="step">
+        <div class="head"><span class="n">2</span><span class="line"></span></div>
+        <h3>Set the condition</h3>
+        <p>The policy waits in the vault until its rule holds. Until then, nothing moves.</p>
+        <div class="conds"><span>a date</span><span>N of M approvals</span><span>a verifier's signature</span><span>a schedule</span><span>a sweep</span></div>
+      </div>
+      <div class="step">
+        <div class="head"><span class="n">3</span><span class="line"></span></div>
+        <h3>Paid, or returned</h3>
+        <p>When the rule holds, anyone can trigger the release and the contract pays the recipient itself: on Arc directly, or on Base or Arbitrum through Circle's CCTP, with no gas needed on their side. If it never holds, you take the money back after the deadline.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap">
+    <div class="lead reveal">
+      <div class="eyebrow">Why you can trust it</div>
+      <h2>The contract holds the money, and it has only two places to send it.</h2>
+    </div>
+    <div class="trust reveal">
+      <div class="t"><svg class="ic ti"><use href="#i-lock"/></svg><div><h3>Nobody can take it</h3><p>Money in a policy can only go to its recipient, or back to the wallet that funded it. There is no admin key, no upgrade, and no operator holding funds.</p></div></div>
+      <div class="t"><svg class="ic ti"><use href="#i-check"/></svg><div><h3>Paid, or refunded: never stuck</h3><p>Every policy has a deadline. Before it, a met condition pays. After it, whatever was not paid goes back to the owner. A deadline can only be moved later, which only helps the recipient.</p></div></div>
+      <div class="t"><svg class="ic ti"><use href="#i-zap"/></svg><div><h3>Recipients need nothing</h3><p>No account, no gas, no app. On Base or Arbitrum, Circle's Forwarding Service delivers the USDC to their address.</p></div></div>
+      <div class="t"><svg class="ic ti"><use href="#i-pause"/></svg><div><h3>An emergency brake that cannot steal</h3><p>A 2-of-3 Safe can pause payouts for up to 7 days if something looks wrong. Every deadline moves out by the pause, owners can still take back unmet policies, and the Safe can never move anyone's money.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="wrap">
+    <div class="lead reveal">
+      <div class="eyebrow">Proof on mainnet</div>
+      <h2>Real USDC, real payouts.</h2>
+      <p>The first two policies on the mainnet vault: one paid on Arc, one paid on Base to a wallet holding no ETH. Every line links to the transaction.</p>
+    </div>
+    <div class="ledger reveal">
+      <div class="lh"><span>Arc mainnet · chain 5042</span><span class="pill">onchain</span></div>
+      <div class="lr"><span class="what">Vault deployed<span class="s">block 23706907 · cost 0.1023 USDC</span></span><a href="https://explorer.arc.io/tx/0xcd2a9a43d09fdd8cc50d1294f85d870fbce5aa8eed57d0a2bd01c900e323521f" target="_blank" rel="noopener">0xcd2a9a43… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+      <div class="lr"><span class="what">Policy 0 locked and created<span class="s">one transaction, from the owner's wallet</span></span><a href="https://explorer.arc.io/tx/0x93c9a2e299d4c6ab37684d21f21dbc2a31af8339c216a28e71394c434be61c82" target="_blank" rel="noopener">0x93c9a2e2… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+      <div class="lr"><span class="what">Policy 0 paid on Arc<span class="s">the contract sent 0.10 USDC to the recipient</span></span><a href="https://explorer.arc.io/tx/0x6242536b4b1be14621936bdc5d96c1af573f8305774dd2230c7d4f097dfae37b" target="_blank" rel="noopener">0x6242536b… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+      <div class="lr"><span class="what">Policy 1 locked and created<span class="s">payable on Base</span></span><a href="https://explorer.arc.io/tx/0x6405787ef5a67948809ae9e19218cc0dc4b2c0448c971dac2b5a1c55c4e0e256" target="_blank" rel="noopener">0x6405787e… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+      <div class="lr"><span class="what">Policy 1 released on Arc<span class="s">the contract sent it through Circle's CCTP</span></span><a href="https://explorer.arc.io/tx/0xd691b51026dbd5d6c72f64348556413b0ce826933d7cca9a15ab7cd4ba6c7009" target="_blank" rel="noopener">0xd691b510… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+      <div class="lr"><span class="what">0.10 USDC arrived on Base, 8 seconds later<span class="s">to a recipient holding no ETH</span></span><a href="https://basescan.org/tx/0xc8fe7f99a509f50a827604d19f3ca252dfb283fab58b9bc52fdc5f896b2b1be7" target="_blank" rel="noopener">0xc8fe7f99… <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+    </div>
+    <div class="addrs reveal">
+      <div><div class="k">Vault · PolicyVaultV5</div><div class="v"><a href="https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7" target="_blank" rel="noopener">0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7</a></div></div>
+      <div><div class="k">Guardian · 2-of-3 Safe</div><div class="v"><a href="https://explorer.arc.io/address/0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a" target="_blank" rel="noopener">0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a</a></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <div class="limits reveal">
+      <h3>What to know before you use it</h3>
+      <ul>
+        <li>The contract <b>has not been audited yet</b>. <span>It is tested, and was exercised end to end on Arc testnet first, but an audit comes next.</span></li>
+        <li>The vault holds <b>at most 100 USDC in total</b>, across everyone. <span>Use small amounts.</span></li>
+        <li>Price-based conditions are in the contract, <b>not yet in the app</b>.</li>
+        <li>Brave's Shields block Arc's public connections. <span>Allow this site, or connect your wallet and the app reads through it.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="glow" style="width:720px;height:720px;left:50%;top:50%;transform:translate(-50%,-50%)"></div>
+  <div class="wrap" style="position:relative">
+    <h2>Try it with a small amount.</h2>
+    <p>Lock a few cents for yourself, behind a timelock a few minutes away, and watch the contract pay it back out.</p>
+    <div class="cta">
+      <a class="btn primary" href="/app/">Open the app <svg class="ic"><use href="#i-arrow"/></svg></a>
+      <a class="btn ghost" href="https://github.com/abdoulore/Covenant" target="_blank" rel="noopener"><svg class="ic"><use href="#i-code"/></svg> Read the code</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <div class="fb"><span class="d"></span> Covenant</div>
+        <p class="about">Conditional USDC payments on Arc. Lock it behind a rule; the contract pays when it holds, or returns it when it never does.</p>
+      </div>
+      <div>
+        <div class="ft">Use it</div>
+        <ul>
+          <li><a href="/app/">The app</a></li>
+          <li><a href="https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7" target="_blank" rel="noopener">The vault on Arc's explorer</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="ft">Read more</div>
+        <ul>
+          <li><a href="https://github.com/abdoulore/Covenant" target="_blank" rel="noopener">Code and README</a></li>
+          <li><a href="https://github.com/abdoulore/Covenant/blob/main/docs/RESULTS.md" target="_blank" rel="noopener">Every transaction, recorded</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="fbar"><span>Live on Arc mainnet · unaudited beta · at most 100 USDC in total.</span><span>Built on Arc, with USDC and Circle's CCTP.</span></div>
+  </div>
+</footer>
+
+<script>
+// The live vault panel: four reads from the contract on Arc mainnet, sent straight from the browser.
+// It tries each public RPC Arc lists, in order, so one being down or blocked does not blank it.
+const VAULT = "0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7";
+const RPCS = ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io"];
+const CALLS = { held: "0xf43cc773", cap: "0x8b77ab45", count: "0xcad0b8db", paused: "0x5c975abb" }; // totalHeld, fundsCap, nextPolicyId, paused
+
+async function readAll(rpc) {
+  const body = Object.entries(CALLS).map(([id, data]) => ({ jsonrpc: "2.0", id, method: "eth_call", params: [{ to: VAULT, data }, "latest"] }));
+  const res = await fetch(rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(String(res.status));
+  const out = {};
+  for (const r of await res.json()) { if (r.error || !r.result) throw new Error("rpc error"); out[r.id] = BigInt(r.result); }
+  return out;
+}
+
+const usdc = (base) => (Number(base) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+async function refresh() {
+  for (const rpc of RPCS) {
+    try {
+      const v = await readAll(rpc);
+      document.getElementById("held").textContent = usdc(v.held);
+      document.getElementById("cap").textContent = usdc(v.cap);
+      document.getElementById("count").textContent = v.count.toString();
+      document.getElementById("paused").textContent = v.paused ? "paused by the guardian" : "running";
+      document.getElementById("bar").style.width = (v.cap > 0n ? Math.min(100, Number((v.held * 10000n) / v.cap) / 100) : 0) + "%";
+      const live = document.getElementById("live");
+      live.classList.remove("off");
+      document.getElementById("live-text").textContent = "live";
+      return;
+    } catch { /* next RPC */ }
+  }
+  document.getElementById("live-text").textContent = "could not reach Arc";
+}
+refresh();
+setInterval(refresh, 30000);
+
+// Reveal on scroll, quietly; everything is visible without it.
+const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("in")), { threshold: 0.12 }) : null;
+document.querySelectorAll(".reveal").forEach((el) => (io ? io.observe(el) : el.classList.add("in")));
+</script>
+</body>
+</html>
