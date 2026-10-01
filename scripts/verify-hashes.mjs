@@ -25,9 +25,18 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Explorer host to the RPC that can answer for it. */
+const ARC_TESTNET_RPCS = { rpcEnv: ["ARC_TESTNET_RPC_URL", "ARC_TESTNET_RPC_FALLBACK_URL"], defaults: ["https://rpc.testnet.arc.io"] };
 const CHAINS = [
-  { host: "testnet.arcscan.app", name: "Arc Testnet", rpcEnv: ["ARC_TESTNET_RPC_URL", "ARC_TESTNET_RPC_FALLBACK_URL"] },
-  { host: "sepolia.basescan.org", name: "Base Sepolia", rpcEnv: ["BASE_SEPOLIA_RPC_URL", "BASE_SEPOLIA_RPC_FALLBACK_URL"] },
+  { host: "testnet.arcscan.app", name: "Arc Testnet", ...ARC_TESTNET_RPCS },
+  { host: "explorer.testnet.arc.io", name: "Arc Testnet", ...ARC_TESTNET_RPCS },
+  { host: "sepolia.basescan.org", name: "Base Sepolia", rpcEnv: ["BASE_SEPOLIA_RPC_URL", "BASE_SEPOLIA_RPC_FALLBACK_URL"], defaults: [] },
+  // Mainnet proofs. Public, keyless RPCs by default (Arc lists its own and three providers), so CI
+  // needs no new secrets to check them.
+  {
+    host: "explorer.arc.io", name: "Arc mainnet", rpcEnv: ["ARC_MAINNET_RPC_URL"],
+    defaults: ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io"],
+  },
+  { host: "basescan.org", name: "Base", rpcEnv: ["BASE_MAINNET_RPC_URL"], defaults: ["https://mainnet.base.org"] },
 ];
 
 const TX_URL = /https?:\/\/([a-z0-9.-]+)\/tx\/(0x[0-9a-fA-F]{64})/g;
@@ -69,7 +78,7 @@ function loadEnv() {
  * for three hashes that are real. A hash is reported fake only when every RPC agrees.
  */
 function rpcsFor(chain) {
-  return chain.rpcEnv.map((key) => process.env[key]).filter(Boolean);
+  return [...new Set([...chain.rpcEnv.map((key) => process.env[key]).filter(Boolean), ...(chain.defaults ?? [])])];
 }
 
 async function rpcCall(rpc, method, hash) {

@@ -1,216 +1,142 @@
 # Covenant
 
-Programmable treasury settlement on Arc. Lock USDC in an onchain vault, attach a rule for who gets paid, how much, in which currency, and on which chain, and the payment settles itself the moment the rule is met. Every step is verifiable onchain.
+Conditional USDC payments on Arc. Put USDC into a policy from your own wallet, attach a rule for when it may be paid, and the vault pays the recipient itself the moment the rule is met: on Arc, or on Base or Arbitrum through Circle's CCTP. Nobody else can move the money. If the rule is never met, you take it back.
 
-Built for the Circle brief on stablecoin-native DeFi on Arc. Testnet only.
+> **Live on Arc mainnet as an unaudited beta.** The vault can hold at most **100 USDC in total** across everyone, so use small amounts. It has not been audited yet.
 
-## What it is
+| | |
+| --- | --- |
+| **App** | [covenant-mainnet.vercel.app](https://covenant-mainnet.vercel.app) |
+| **Network** | Arc mainnet, chain id 5042 |
+| **Vault** | [`0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7) (PolicyVaultV5) |
+| **Guardian** | [`0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a`](https://explorer.arc.io/address/0x75e204AfA5f390490f2d5021c92C1B5d38a9D52a), a 2-of-3 Safe |
+| **Funds cap** | 100 USDC across all policies, raise-only |
+| **Pays out on** | Arc, Base, Arbitrum |
 
-A treasury holder deposits USDC into a vault and creates a policy: pay recipient R an amount A, in currency C, on chain D, but only when condition X is met. The moment the condition is satisfied, settlement runs on its own. It converts the currency if it needs to, moves the funds across chains with CCTP, and pays the recipient. Nobody signs anything after the trigger.
+To use it you need a browser wallet (MetaMask, Rabby and the like) and some USDC on Arc mainnet. USDC is also Arc's gas, so there is no other token to hold. Brave's Shields block Arc's public RPCs: allow the site, or connect your wallet and the app reads through it.
 
-The split that makes this safe: the contract decides whether the money moves, and enforces the condition onchain. The off-chain service only decides how the money routes. If the condition is not met, release reverts on Arc, and anyone can check that it did.
+## What a policy can do
+
+A policy is one promise: pay this recipient this much, on this chain, when this condition holds, and not after this deadline.
+
+| Condition | Pays when | In the app |
+| --- | --- | --- |
+| Timelock | a moment has passed | yes |
+| Approval | N of the named approvers have approved | yes |
+| Attestation | a named attester has signed the policy's EIP-712 statement | yes |
+| Payroll | every interval, a fixed amount, for a fixed or open-ended number of periods | yes |
+| Sweep | every interval, everything held above a buffer | yes |
+| Price | a Chainlink price feed is above or below a threshold | contract only |
+| Signed price | a signed price proof, verified at release | contract only; no provider on Arc mainnet yet |
+
+Before the deadline the owner can cancel a policy whose condition is not met, and get everything back. After the deadline the owner can reclaim whatever was not paid. A stopped payroll still pays the periods already owed. Deadlines can only move later, which only ever helps the recipient.
 
 ## How it works
 
 ```mermaid
 flowchart TB
-    G[USDC on another chain] -->|Circle Gateway, no manual bridge| T[Treasury wallet]
-    T -->|deposit USDC| V["PolicyVault v4 on Arc<br/>timelock, approval, attestation, oracle, schedule, pull oracle"]
-    V -->|condition NOT met| X[release reverts, status 0]
-    V -->|condition met, PolicyReleased| E[Executor service]
-
-    E --> A{payout currency and chain}
-    A -->|EURC on Arc| S[App Kit swap USDC to EURC]
-    S --> PA[send EURC to recipient on Arc]
-    A -->|USDC cross-chain| C[CCTP v2 burn on Arc]
-    C --> PB[mint direct to recipient on Base Sepolia, gasless]
+    O[Owner's wallet] -->|"one transaction: approve the exact amount and create the policy<br/>(Arc's Multicall3From)"| V["PolicyVaultV5 on Arc mainnet<br/>holds the USDC, enforces the rule"]
+    V -->|rule not met| X[release reverts, nothing moves]
+    V -->|rule met: anyone may call release| P{where is the recipient paid?}
+    P -->|Arc| A[the vault transfers USDC to the recipient]
+    P -->|Base or Arbitrum| C["the vault burns through CCTP v2<br/>with Circle's Forwarding Service"]
+    C --> M[USDC minted to the recipient, who needs no gas there]
+    V -->|deadline passed, or rule unmet and cancelled| R[USDC back to the owner]
 ```
 
-- **PolicyVault** (Solidity, Arc) holds the USDC and enforces the release condition. It supports six release conditions: a timelock, an N-of-M approval, an attester's EIP-712 signature, a price feed crossing a threshold, a schedule, and a signed price proof verified at release. Release reverts if the condition is not met.
-- **Executor** (TypeScript) watches for the `PolicyReleased` event and routes the settlement. It never decides whether funds move, only how they get to the recipient. Settlement state is written to Postgres before any funds move, keyed by vault, so neither a restart nor a second vault deployment can make it pay twice or skip a payment.
-- **Wallets** are Circle developer-controlled wallets for the treasury, executor, and recipient roles, behind one interface so a later move to user-controlled wallets touches no settlement logic.
+- **Non-custodial.** Each policy belongs to the wallet that funded it. There is no admin key, no upgrade path and no operator holding funds: the contract is immutable, and the only places the money can ever go are the recipient and the owner.
+- **The vault pays directly.** On Arc, the payout is a transfer in the release transaction itself. Cross-chain, the vault burns with CCTP v2 and Circle's Forwarding Service mints to the recipient, who needs no gas on the destination chain. The cross-chain fee is fixed when the policy is created and paid by the owner, never taken from the recipient's amount.
+- **Release is permissionless.** The rule is the only gate, so anyone can release a policy that is due: the recipient, the owner, or a keeper. Covenant's keeper does it automatically; on mainnet it is not running yet, so a due policy is released by pressing Release.
+- **One transaction to fund.** The app approves exactly the amount needed and creates the policy in a single transaction through Arc's own Multicall3From, so no allowance is left behind. Every action is simulated first, so a refusal shows the vault's own reason before the wallet asks for anything.
+- **The vault address is built into the app,** not fetched from a server, so nothing between you and Arc can point your money somewhere else.
 
-## Why this needs Arc
+### The guardian
 
-This is treasury logic that only stays simple when the stablecoin is the native asset.
+The guardian is a 2-of-3 Safe. It can pause releases for up to 7 days, then must wait 7 days after the pause ends before pausing again, and every deadline moves out by the time spent paused, so a pause can never turn a recipient's payment into an owner's refund. Owners can still cancel unmet policies and reclaim during a pause. The guardian can raise the funds cap but never lower it, and can hand the role on or give it up. It can never move, redirect or freeze anyone's money.
 
-- **USDC is native gas.** Deploying the current vault (v4, six condition types) costs 0.0797 USDC in gas; the first canary vault cost 0.0294. Priced in dollars, with no exposure to a separate volatile gas token. Full per-deployment history in [docs/RESULTS.md](docs/RESULTS.md).
-- **Sub-second finality.** Settlement completes in seconds, not the days a conventional cross-border payment takes.
-- **Native cross-chain USDC.** CCTP v2 burns and mints the real asset. No wrapped tokens and no third-party bridge.
-- **Gasless recipient.** Circle's forwarder submits the mint, so the payee needs no gas token on the destination chain to be paid.
+## Status and limits
 
-## Circle products used
+- **Unaudited.** The contract has 52 tests of its own, mutation-tested, and was exercised end to end on Arc testnet from ordinary browser wallets before going to mainnet. An audit comes next; until then, the 100 USDC cap bounds what is at risk.
+- **Arc runs Ethereum's EVM with differences** (USDC as gas, a USDC blocklist enforced at runtime, a 20 gwei minimum fee). If a recipient is blocklisted by USDC, payments to them revert and the owner reclaims after the deadline. The app and keeper always offer at least Arc's minimum fee.
+- **Price conditions** are in the contract but not yet in the app. Pyth, the signed-price provider used on testnet, is not deployed on Arc mainnet.
 
-| Product | Where it is used |
+## Proof on mainnet
+
+Read from the chain and from Circle's API, not copied from a terminal.
+
+| Step | Transaction |
 | --- | --- |
-| USDC on Arc | Native gas token and the settlement asset. Amounts, fees, and deploy cost are all in dollars. |
-| Circle Wallets | Developer-controlled treasury, executor, and recipient wallets, behind one interface. |
-| App Kit | Swap for the FX leg, send for the payout, run server-side with idempotent settlement state. |
-| CCTP v2 | Native cross-chain USDC by burn and mint, with a forwarder so the recipient needs no gas. |
-| Gateway | Fund an Arc policy from a unified USDC balance sourced on another chain, with no manual bridge. |
+| Vault deployed, block 23706907, cost 0.1023 USDC | [`0xcd2a9a43…`](https://explorer.arc.io/tx/0xcd2a9a43d09fdd8cc50d1294f85d870fbce5aa8eed57d0a2bd01c900e323521f) |
+| Policy 0 created and funded in one transaction | [`0x93c9a2e2…`](https://explorer.arc.io/tx/0x93c9a2e299d4c6ab37684d21f21dbc2a31af8339c216a28e71394c434be61c82) |
+| Policy 0 released: the vault paid 0.10 USDC to the recipient on Arc | [`0x6242536b…`](https://explorer.arc.io/tx/0x6242536b4b1be14621936bdc5d96c1af573f8305774dd2230c7d4f097dfae37b) |
+| Policy 1 created and funded in one transaction | [`0x6405787e…`](https://explorer.arc.io/tx/0x6405787ef5a67948809ae9e19218cc0dc4b2c0448c971dac2b5a1c55c4e0e256) |
+| Policy 1 released: the vault burned through CCTP v2 for Base | [`0xd691b510…`](https://explorer.arc.io/tx/0xd691b51026dbd5d6c72f64348556413b0ce826933d7cca9a15ab7cd4ba6c7009) |
+| 0.10 USDC minted to the recipient on Base, 8 seconds later, while it held no ETH | [`0xc8fe7f99…`](https://basescan.org/tx/0xc8fe7f99a509f50a827604d19f3ca252dfb283fab58b9bc52fdc5f896b2b1be7) |
 
-## Proof
+| Quality check | Result |
+| --- | --- |
+| Automated tests | 497, across contract and executor |
+| Every transaction hash cited in this repository | resolved against its chain in CI (`npm run verify:hashes`) |
+| App bundles | built in CI and checked for secret material |
 
-Everything is proven on live testnet. Full transaction hashes and explorer links are in [docs/RESULTS.md](docs/RESULTS.md), and [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) is a ten-minute tour of the two strongest proofs.
+## Testnet history
 
-All figures below are from the v4 re-proof pass, run on 2026-08-09.
+Everything in this section ran on **Arc testnet** (chain id 5042002) and **Base Sepolia**, with test USDC. None of it is mainnet.
 
-| Result | Value |
+Covenant began as an operator-run treasury engine: an operator funded policies from a treasury wallet, and an off-chain executor paid recipients after the vault released, swapping to EURC with App Kit or bridging with CCTP v2. That model was proven end to end across three testnet vaults, then replaced by v5, because funding other people's payments from one operator's wallet makes the operator their custodian.
+
+| Deployment | Network | Address | What it carries |
+| --- | --- | --- | --- |
+| v5 | Arc testnet | [`0x87A204d4eDbE715b00eA05a2Ad860f40b710c890`](https://testnet.arcscan.app/address/0x87A204d4eDbE715b00eA05a2Ad860f40b710c890) | the same contract as mainnet, used for its re-proof |
+| v4 | Arc testnet | [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) | operator model, six conditions, pull oracle |
+| v3 | Arc testnet | [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) | superseded, read-only |
+| v2 | Arc testnet | [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1) | superseded, read-only |
+
+From the v4 testnet re-proof, run on 2026-08-09:
+
+| Result on testnet | Value |
 | --- | --- |
 | FX settlement on Arc, release to paid | 11.8 seconds |
 | Cross-chain settlement, Arc to Base Sepolia | 31.5 seconds |
 | Attestation settlement, signed release to paid | 3.7 seconds |
-| Oracle settlement, depeg-protection release to paid | 3.9 seconds |
-| Pull oracle, price verified and released | one transaction |
-| Pull oracle, uncertain price refused | 8.01 bps spread against a 4 bps bound |
-| Recurring payroll | 3 periods, each settled independently |
-| Fund an Arc policy from USDC on Base Sepolia | via Gateway, no manual bridge |
-| PolicyVault v4 deployment cost | 0.0797 USDC (v1 was 0.0294; cost grows with each condition type) |
-| Recipient paid on Base Sepolia | while holding zero ETH |
-| Condition unmet | release reverts onchain, status 0 |
-| Automated tests | 497, across contract and executor |
+| Pull oracle: an uncertain price refused | 8.01 bps spread against a 4 bps bound |
+| Funding from USDC on Base Sepolia | via Circle Gateway, no manual bridge |
+| Condition unmet | release reverts onchain |
 
-Deployed PolicyVault: [`0x3b507607bA48A65587a9a6136c36cd2f1132d498`](https://testnet.arcscan.app/address/0x3b507607bA48A65587a9a6136c36cd2f1132d498) on Arc Testnet (chain id 5042002), carrying all six condition types. Two superseded deployments remain readable for their proofs: v3 at [`0xDC0040eB02c438D59838A6f178e38184eACf7300`](https://testnet.arcscan.app/address/0xDC0040eB02c438D59838A6f178e38184eACf7300) and v2 at [`0xB702404EA947aec698323Cd42989CA6168f209D1`](https://testnet.arcscan.app/address/0xB702404EA947aec698323Cd42989CA6168f209D1). Each is a separate address because the vault is immutable. The next vault, v5 (`contracts/src/PolicyVaultV5.sol`), is non-custodial: each user funds their own policies from their own wallet and the vault pays recipients itself. It is deployed to Arc testnet at [`0x87A204d4eDbE715b00eA05a2Ad860f40b710c890`](https://testnet.arcscan.app/address/0x87A204d4eDbE715b00eA05a2Ad860f40b710c890) for its re-proof, and to Arc mainnet as a **capped, unaudited beta** at [`0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7`](https://explorer.arc.io/address/0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7): the vault can never hold more than 100 USDC in total, its guardian is a 2-of-3 Safe that can pause releases but never move funds, and it pays on Arc, Base and Arbitrum. It has not been audited yet. Nothing else on this page describes it. Full hashes, per-deployment, are in [docs/RESULTS.md](docs/RESULTS.md), which also records the known defects found so far.
+Every testnet hash, per deployment, and the known defects found along the way are in [docs/RESULTS.md](docs/RESULTS.md).
 
-## Repository layout
+## Circle and Arc pieces used
+
+| Piece | Where |
+| --- | --- |
+| USDC on Arc | the settlement asset and the gas |
+| CCTP v2 with the Forwarding Service | cross-chain payouts made by the vault itself, minted gas-free to the recipient |
+| Circle's fee API | the cross-chain fee fixed on each policy |
+| Arc's Multicall3From | approve and create in one transaction, as the user |
+| Chainlink on Arc | price conditions (contract) |
+| viem's Arc chains | network settings in the app |
+| Safe on Arc | the guardian multisig |
+| Circle Wallets, App Kit, Gateway | the testnet operator model (see Testnet history) |
+
+## Repository
 
 ```
-contracts/   Foundry package: PolicyVault, tests, deploy script
-executor/    TypeScript service: event watcher, settlement engine, Circle integration,
-             the read model, the read-only monitor, and the gated write API
-app/         React operator app: create, fund, approve, and release policies through the API
-site/        Static landing page
-docs/        RESULTS.md, onchain proof for every claim
-scripts/     Repo checks (test-count derivation)
+contracts/   Foundry: PolicyVaultV5 (and the earlier vaults), tests, deploy scripts, broadcast records
+executor/    TypeScript: the v5 keeper and monitor, and the testnet operator API and settlement engine
+app/         React app: the mainnet build (npm run build:mainnet) and the testnet build
+site/        Landing page for the testnet site
+docs/        RESULTS.md (onchain proof), OPERATIONS.md (running and deploying everything)
+scripts/     Repo checks: test count, hash verification, site assembly
 ```
 
-Code comments cite internal working documents under `docs/` (`VERIFICATIONS.md`, `DECISIONS.md`, and `specs/`): the records of what was verified against Circle and Arc documentation, why each architectural call was made, and the Phase 2 design. Those are not part of this repository. The findings that matter to the code are restated in the comments themselves, so nothing here depends on reading them.
-
-## Running it
-
-Prerequisites: Node 20 or newer, Foundry, and a filled `.env` (copy `.env.example`). Testnet only.
+Run the checks:
 
 ```bash
-git submodule update --init # OpenZeppelin, required before the contracts will build
-npm install                 # root and the executor workspace
-npm --prefix app install    # the app is a separate package with its own lockfile
-npm test                    # the Foundry contract suite and the executor suite
-
-npm run wallets:write       # create the Circle developer-controlled wallets
-npm run deploy              # deploy PolicyVault to Arc testnet
-npm run canary              # stage and settle the FX and cross-chain archetypes
-npm run demo:attestation    # release a policy on a signed attestation, end to end
-npm run failure-path        # demonstrate the onchain revert when a condition is unmet
-npm run dashboard           # read-only monitor: policies, settlement receipts, live depeg panel
+git submodule update --init    # OpenZeppelin, before the contracts build
+npm install && npm --prefix app install
+npm test                       # contract and executor suites
+npm run typecheck
+npm --prefix app run dev:mainnet   # the mainnet app, locally
 ```
 
-The operator app, which creates, funds, approves, and releases policies through a gated API:
-
-```bash
-npm run api                 # the write API. Needs OPERATOR_SECRET; see .env.example
-COVENANT_KEEPER=on npm run api  # the same, and also settle releases as they happen; needs DATABASE_URL
-npm --prefix app run dev    # the operator app, proxying /api to the API above
-npm --prefix app run build  # production bundle, gated on the bundle secret check
-```
-
-The keeper records every settlement in Postgres, keyed on the vault, the policy id, and the period, so the database itself refuses to pay the same release twice. Policy ids restart at zero on each vault deployment, so the vault has to be part of that key; without it, a policy on a new vault would look like one already paid. The keeper will not start without `DATABASE_URL`.
-
-Payments that never happened are checked for too. The keeper keeps a ledger of every release the vault has emitted, from its deploy block, and every five minutes compares it with what was settled. A release left unpaid, a settlement stuck or failed, or the keeper falling behind the chain is sent to Telegram once, and again when it clears. The same check and the tools to act on it are commands:
-
-```bash
-npm run reconcile                              # every release that needs attention
-npm run reconcile -- backfill                  # record the vault's release history into the ledger
-npm run reconcile -- resolve <tx> --note "..." # record a release as paid another way
-npm run settle-release -- <tx>                 # what paying a stranded release would do; --send to pay it
-```
-
-For v5, the keeper no longer pays anyone: the vault pays at release. It calls release when a policy can be released, simulating each call first so the contract decides, and the monitor alerts on a releasable policy nobody released, a deadline within a day, and a cross-chain mint Circle has not completed:
-
-```bash
-npm run v5:release             # release every v5 policy that can be; --watch to keep going
-npm run v5:monitor             # one monitoring pass
-```
-
-In the app, v5 is used from the user's own browser wallet, separate from operator sign-in. A user creates and funds a policy in one transaction, which approves the exact amount and creates the policy together through Arc's Multicall3From, and signs every action as the role they hold: anyone can release a policy that is due; its approvers approve; its attester signs; only its owner can cancel, stop, reclaim, extend or add funds. The vault address is built into the app (`app/src/v5/chain.ts`), not taken from the API, so a server cannot redirect a user's money. After a contract change, run `node app/scripts/sync-v5-abi.mjs` to refresh the app's copy of the ABI; the executor suite fails until you do.
-
-`settle-release` refuses a release the ledger has not seen, one recorded as paid another way, and one with any settlement already started, and pays through the same database claim as the keeper, so it cannot pay twice.
-
-The API refuses to start in a deployed environment without an operator secret and a pinned CORS origin. For a local run set `COVENANT_ENV=dev`. The app talks only to the API: it holds no keys and no provider, and `npm --prefix app run build` fails if any secret material reaches the bundle.
-
-Repo checks:
-
-```bash
-npm run typecheck           # both TypeScript packages
-npm run test:count          # derive the test count and check the README against it
-```
-
-Fund the treasury and executor wallets from the Circle faucet at faucet.circle.com on Arc Testnet before running the canary. USDC is gas on Arc, so the executor needs a working balance on top of the settlement amounts.
-
-## Deploying
-
-Two halves with different requirements, and the split is not cosmetic.
-
-| Piece | What it is | Where it can run |
-| --- | --- | --- |
-| landing page and operator app | one static bundle, page at `/` and app at `/app` | any static host |
-| the write API | persistent Node process | a host that keeps a process alive |
-| the monitor | persistent Node process, read-only | same |
-
-`npm run build:web` produces the static half into `dist/`: the landing page at the root and the app under `/app`. They ship together on one host so the landing page links the app with a relative path. That is presentation only; the app's connection to the write API is cross-origin either way, because the API is not on that host.
-
-The build refuses to assemble if the app bundle was compiled without the `/app/` base, since its assets would otherwise resolve to the root and return the landing page's HTML instead of JavaScript.
-
-**The API must not run on serverless functions.** Two protections depend on state held in the process. Idempotency reserves an in-flight key so simultaneous duplicate writes collapse into one execution; login rate limiting counts attempts against the single operator secret. Split across instances, both silently stop working: two concurrent funds land on separate instances and both execute, and the brute-force ceiling becomes per-instance rather than global. Nothing errors. Run the API where one process handles all of it, or move both to shared storage first.
-
-### Splitting the app and the API across origins
-
-The static bundle and the API on different hosts is a cross-site pair, and three settings have to agree:
-
-```bash
-# on the app build
-VITE_API_BASE=https://api.example.com   # absolute, or requests go to the app's own origin
-
-# on the API
-COVENANT_CORS_ORIGIN=https://app.example.com   # the app's exact origin, never a wildcard
-OPERATOR_SECRET=...                            # required; the API refuses to start without it
-```
-
-The session cookie switches to `SameSite=None; Secure` automatically when a cross-origin deployment is detected, because a `SameSite=Strict` cookie is never sent cross-site and every write would fail as unauthenticated with nothing in the logs to explain it. That relaxation gives up the browser's own CSRF protection, so write routes then require an `Origin` header matching `COVENANT_CORS_ORIGIN`. Both changes are derived from one flag so they cannot drift apart.
-
-If the app and API sit behind one origin through a proxy, set `COVENANT_SAME_ORIGIN=true` to keep the stricter cookie.
-
-`APP_URL` at the top of the script block in `site/index.html` points at the app. It is `/app`, matching the assembled layout. Set it to `""` to hide the button; a landing page should show no link rather than a dead one.
-
-### Vercel
-
-`vercel.json` sets the build command and output directory. Keep the project's root directory at the repository root: the config and the assembly step both live there, and neither `site/` nor `app/` can produce the combined output on its own. Leave the build and output fields blank in the dashboard, since the file already sets them.
-
-The one rewrite sends unmatched `/app/*` paths to the app's entry point. The app is a single page with no server routes, and static files under `/app` are served directly, so only paths with no file behind them fall through. Vercel's schema rejects unknown keys in that object, so the explanation lives here rather than beside it.
-
-Set `VITE_API_BASE` as a build environment variable pointing at the deployed API, with no trailing slash, or the app will request `/api` from its own origin and find nothing there. It is baked into the bundle at build time, so changing it needs a redeploy.
-
-### Railway
-
-`railway.json` configures the API service: `npm ci` to build, `npm run api` to start, health check on `/api/health`. The health route touches nothing, so a probe running every few seconds costs no chain reads.
-
-The process binds `PORT` if the platform sets one, falling back to `API_PORT` and then 4320.
-
-Environment variables to set on the service: everything in `.env.example` that the API path needs, which is the Arc and Base Sepolia RPC URLs, the vault and token addresses, the Pyth adapter and feed id, the Circle API key and entity secret, the wallet ids, `DEPLOYER_PRIVATE_KEY`, plus `OPERATOR_SECRET` and `COVENANT_CORS_ORIGIN` pinned to the app's origin. Leave `COVENANT_ENV` unset: the API refuses to start in deployed mode without a secret and a pinned origin, which is the point.
-
-**Mount a volume at `executor/.state` if you want settlement receipts to survive a redeploy.** Container filesystems are ephemeral. The API only reads that directory, so losing it costs the Settlements tab its history and nothing else. It becomes load-bearing the moment anything that *writes* settlements runs here, because that store is the record that stops a replayed event paying twice. Nothing in this repo's start scripts does today.
-
-The monitor is a second service from the same repo with `npm run dashboard` as its start command. It is read-only, holds no keys, and mounts no write routes, which makes it the safe thing to link publicly.
-
-## Status
-
-All six condition types settle end to end on PolicyVault v4, and every failure path is proven onchain with its revert reason decoded, not just its status.
-
-**Conditions.** A timelock releases after a timestamp. An N-of-M approval releases once the named approvers sign. An attestation releases on a named attester's EIP-712 signature, bound to the policy and the contract so it cannot be replayed. A schedule releases period by period, for payroll or for sweeping a balance above a buffer, with a `maxCatchUp` bound that holds a long-overdue period for owner approval rather than auto-paying it.
-
-**Oracle, two paths, one guarantee each.** Arc testnet publishes no Chainlink push feeds, but Pyth is deployed on Arc and reachable with no credentials. The pushed-feed path reads Pyth through its official PythAggregatorV3 adapter: the price must be refreshed before release, and the interface carries no confidence interval, so that path cannot check one. The pull path takes a signed price proof through a pluggable adapter, verifies it and releases in a single transaction, and rejects a price whose confidence interval is wider than the policy allows. New policies default to the pull path. Both fail closed.
-
-**Gateway** funds an Arc policy from a unified USDC balance sourced on another chain with no manual bridge, proven end to end from Base Sepolia. The vault is untouched; Gateway sits upstream on the funding side.
-
-**Surfaces.** An operator app creates, funds, approves, and releases policies through a gated API that holds the only credentials. A read-only monitor (`npm run dashboard`) shows every policy across all three deployments, a settlement receipt per transaction with its measured custody gap, and a live Pyth depeg panel.
-
-The vault is immutable, so v4 is the third address. v2 and v3 remain readable for their proofs and are never written to. [docs/RESULTS.md](docs/RESULTS.md) records every deployment's proofs separately, and records the known defects found so far, including one still open. Testnet only.
+Running the keeper, the monitor, the testnet operator API, and deploying the sites: [docs/OPERATIONS.md](docs/OPERATIONS.md).
