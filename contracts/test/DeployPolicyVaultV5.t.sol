@@ -77,4 +77,12 @@ contract DeployPolicyVaultV5Test is Test {
         vm.chainId(5042002);
         script.validate(address(usdc), address(messenger), _base(), guardianWallet, 1_000e6);
     }
+
+    function test_onMainnetReadsOnlyMainnetSettings() public {
+        vm.chainId(5042);
+        assertEq(script.setting("DEPLOYER_PRIVATE_KEY"), "MAINNET_DEPLOYER_PRIVATE_KEY");
+        assertEq(script.setting("V5_GUARDIAN"), "MAINNET_V5_GUARDIAN");
+        vm.chainId(5042002);
+        assertEq(script.setting("DEPLOYER_PRIVATE_KEY"), "DEPLOYER_PRIVATE_KEY");
+    }
 }

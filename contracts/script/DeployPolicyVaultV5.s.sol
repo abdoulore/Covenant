@@ -13,7 +13,9 @@ import {ITokenMessengerV2} from "../src/ITokenMessengerV2.sol";
  *   forge script script/DeployPolicyVaultV5.s.sol --rpc-url $ARC_TESTNET_RPC_URL --broadcast
  *
  * Reads ARC_USDC_ADDRESS, ARC_CCTP_TOKEN_MESSENGER, V5_DESTINATIONS (comma separated CCTP domains,
- * EVM chains only), V5_GUARDIAN, V5_FUNDS_CAP (6 decimal base units), and DEPLOYER_PRIVATE_KEY.
+ * EVM chains only), V5_GUARDIAN, V5_FUNDS_CAP (6 decimal base units), and DEPLOYER_PRIVATE_KEY. On Arc
+ * mainnet each is read with a MAINNET_ prefix instead (MAINNET_DEPLOYER_PRIVATE_KEY and so on); see
+ * setting().
  *
  * Every check below runs before anything is broadcast. The vault is immutable, so a wrong setting
  * is a redeploy on testnet and, on mainnet, a vault holding other people's money that cannot be
@@ -24,20 +26,28 @@ contract DeployPolicyVaultV5 is Script {
     uint256 internal constant ARC_MAINNET = 5042;
 
     function run() external returns (PolicyVaultV5 vault) {
-        uint256[] memory raw = vm.envUint("V5_DESTINATIONS", ",");
+        uint256[] memory raw = vm.envUint(setting("V5_DESTINATIONS"), ",");
         uint32[] memory destinations = new uint32[](raw.length);
         for (uint256 i = 0; i < raw.length; ++i) {
             require(raw[i] <= type(uint32).max, "V5_DESTINATIONS holds a value that is not a CCTP domain");
             destinations[i] = uint32(raw[i]);
         }
         return deploy(
-            vm.envAddress("ARC_USDC_ADDRESS"),
-            vm.envAddress("ARC_CCTP_TOKEN_MESSENGER"),
+            vm.envAddress(setting("ARC_USDC_ADDRESS")),
+            vm.envAddress(setting("ARC_CCTP_TOKEN_MESSENGER")),
             destinations,
-            vm.envAddress("V5_GUARDIAN"),
-            vm.envUint("V5_FUNDS_CAP"),
-            vm.envUint("DEPLOYER_PRIVATE_KEY")
+            vm.envAddress(setting("V5_GUARDIAN")),
+            vm.envUint(setting("V5_FUNDS_CAP")),
+            vm.envUint(setting("DEPLOYER_PRIVATE_KEY"))
         );
+    }
+
+    /// @notice The environment variable a setting is read from: MAINNET_<name> on Arc mainnet, <name>
+    ///         elsewhere. One .env holds both networks, so a testnet value (the testnet deployer key,
+    ///         the testnet CCTP messenger, a testnet guardian) can never be picked up on mainnet, and a
+    ///         missing mainnet value stops the deploy instead of falling back.
+    function setting(string memory name) public view returns (string memory) {
+        return block.chainid == ARC_MAINNET ? string.concat("MAINNET_", name) : name;
     }
 
     /// @dev Explicit arguments, so tests can drive it without the process-wide environment.
