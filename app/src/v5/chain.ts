@@ -53,7 +53,14 @@ export const MIN_MAX_FEE_PER_GAS = 20_000_000_000n;
  * blocked by a browser's privacy shield, does not leave the app blank.
  */
 export const READ_RPCS = IS_MAINNET
-  ? ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io"]
+  ? [
+      // First, the site's own /rpc, which Vercel forwards to rpc.mainnet.arc.io (app/vercel.json).
+      // Privacy lists (EasyPrivacy, on by default in Brave and uBlock Origin) block every *.arc.io
+      // request made from another site with "||arc.io^$third-party", a rule older than the chain;
+      // a same-site address is not third-party, so it is not blocked.
+      ...(typeof window !== "undefined" ? [`${window.location.origin}/rpc`] : []),
+      "https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io",
+    ]
   : ["https://rpc.testnet.arc.io", "https://rpc.quicknode.testnet.arc.io", "https://rpc.blockdaemon.testnet.arc.io", "https://rpc.drpc.testnet.arc.io"];
 
 export const ARC_DOMAIN = 26;

@@ -417,9 +417,11 @@
 
 <script>
 // The live vault panel: four reads from the contract on Arc mainnet, sent straight from the browser.
-// It tries each public RPC Arc lists, in order, so one being down or blocked does not blank it.
+// It tries this site's own /rpc first, which Vercel forwards to Arc's RPC: privacy lists block every
+// *.arc.io request made from another site ("||arc.io^$third-party" in EasyPrivacy, on by default in
+// Brave and uBlock Origin), and a same-site address is not third-party. Then each public RPC Arc lists.
 const VAULT = "0x6C2F006D6788883Cc6520DB80905079f2BBDB3f7";
-const RPCS = ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io"];
+const RPCS = ["/rpc", "https://rpc.mainnet.arc.io", "https://rpc.quicknode.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io", "https://rpc.drpc.mainnet.arc.io"];
 const CALLS = { held: "0xf43cc773", cap: "0x8b77ab45", count: "0xcad0b8db", paused: "0x5c975abb" }; // totalHeld, fundsCap, nextPolicyId, paused
 
 async function readAll(rpc) {
@@ -448,7 +450,7 @@ async function refresh() {
       return;
     } catch { /* next RPC */ }
   }
-  document.getElementById("live-text").textContent = "could not reach Arc";
+  document.getElementById("live-text").textContent = "blocked by your browser";
 }
 refresh();
 setInterval(refresh, 30000);

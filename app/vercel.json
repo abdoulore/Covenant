@@ -5,6 +5,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/rpc",
+      "destination": "https://rpc.mainnet.arc.io/"
+    },
+    {
       "source": "/app",
       "destination": "/app/index.html"
     },

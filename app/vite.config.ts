@@ -25,6 +25,8 @@ export default defineConfig(({ command, mode }) => ({
     port: 5173,
     proxy: {
       "/api": { target: apiTarget, changeOrigin: true },
+      // The same /rpc route the mainnet site has on Vercel (app/vercel.json), for dev:mainnet.
+      "/rpc": { target: "https://rpc.mainnet.arc.io", changeOrigin: true, rewrite: () => "/" },
     },
   },
   build: { outDir: mode === "mainnet" ? "dist-mainnet/app" : "dist", sourcemap: false },
