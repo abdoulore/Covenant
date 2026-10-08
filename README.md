@@ -16,7 +16,7 @@ Conditional USDC payments on Arc. Put USDC into a policy from your own wallet, a
 | **Funds cap** | 100 USDC across all policies, raise-only |
 | **Pays out on** | Arc, Base, Arbitrum |
 
-To use it you need a browser wallet (MetaMask, Rabby and the like) and some USDC on Arc mainnet. USDC is also Arc's gas, so there is no other token to hold. Brave's Shields block Arc's public RPCs: allow the site, or connect your wallet and the app reads through it.
+To use it you need a browser wallet (MetaMask, Rabby and the like) and some USDC on Arc mainnet. USDC is also Arc's gas, so there is no other token to hold.
 
 ## What a policy can do
 
